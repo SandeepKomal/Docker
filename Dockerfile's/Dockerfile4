@@ -5,6 +5,6 @@ RUN mvn -f /java/pom.xml clean package
 ########## Second Stage build ###########
 #FROM gcr.io/distroless/java17-debian12
 FROM amazoncorretto:17-alpine
-COPY --from=build1 /java/target/packersmovers.jar /java/packersmovers.jar
+COPY --from=build1 /java/target/customer-0.0.1.jar /java/customer-0.0.1.jar
 EXPOSE 8080
-ENTRYPOINT ["java","-jar","/java/packersmovers.jar"]
+ENTRYPOINT ["java","-jar","/java/customer-0.0.1.jar"]
