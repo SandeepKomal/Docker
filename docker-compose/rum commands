@@ -1,0 +1,11 @@
+########## docker-compose run commands ###############
+
+docker-compose up ---> start services defined in a Docker compose file 
+
+docker-compose down ---> Stop and remove services defined in a docker compose file 
+
+docker-compose ps ---> List services in a compose file and their status 
+
+docker-compose logs <service_name> ----> view logs for a specific service 4
+
+docker-compose exec <service_name> <command> ----> run a command in a running service container
