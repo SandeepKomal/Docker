@@ -6,9 +6,9 @@
 3) docker run  -->  This command is used to create a container from an image
    Usage: docker run -it -d <image name>
 
-4) docker ps  -->  This command is used to list the running containers
+4) docker ps  or docker container ls -->  This command is used to list the running containers
 
-5) docker ps -a  -->  This command is used to show all the running and exited containers
+5) docker ps -a or docker container ls -a -->  This command is used to show all the running and exited containers
 
 6) docker exec  -->  This command is used to access the running container
    Usage: docker exec -it <container-id> bash
@@ -29,7 +29,7 @@
 11) docker push  -->  This command is used to push an image to the docker hub repository
     Usage: docker push <username/image name>
 
-12) docker images  -->  This command lists all the locally stored docker images
+12) docker images  or docker image ls -->  This command lists all the locally stored docker images
 
 13) docker rm  -->  This command is used to delete a stopped container
     Usage: docker rm <container-id>
@@ -40,7 +40,13 @@
 15) docker build  -->  This command is used to build an image from a specified docker file
     Usage: docker build <path to docker file>
     
-16) docker logs -->  Displays the logs of the docker container with container id mentioned in the command.
+16) docker logs <container_name> -->  Displays the logs of the docker container with container id mentioned in the command.
     Usage: docker logs <container-id>
     
 17) docker logout  -->  This command is used to logout from docker hub repository
+
+18) docker stats <container_name/id> ----> Display real-time container resource usage.
+
+19) docker restart <container_name/id> ---> Rstart a  container.
+
+20) docker info ---> Display system wide information about docker.
