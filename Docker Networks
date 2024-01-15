@@ -1,1 +1,9 @@
+########### Docker Networks ####################
+docker network create <network_name>  -----> create a user defined network 
+
+docker network ls ---> List networks
+
+docker network connect <network_name> <container_name/id> ---> Connect a container to a Network 
+
+docker network disconnect <network_name> <container_name/id> ---> DisConnect a container to a Network 
 
