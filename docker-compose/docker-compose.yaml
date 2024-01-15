@@ -1,4 +1,5 @@
-version: '3'
+version: '3.8'
+
 services:
   mysqldb:
     container_name: mysqldb
@@ -6,9 +7,10 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: adminadmin
       MYSQL_USER: admin
+      MYSQL_PASSWORD: adminpassword
       MYSQL_DATABASE: customerdb
     networks:
-      springboot-mysql-net:
+      - springboot-mysql-net
 
   springboot-restful-webservices:
     container_name: springboot-packers-movers
@@ -20,8 +22,10 @@ services:
     depends_on:
       - mysqldb
     networks:
-      springboot-mysql-net:
+      - springboot-mysql-net
     restart: on-failure
 
 networks:
   springboot-mysql-net:
+    driver: bridge
+
