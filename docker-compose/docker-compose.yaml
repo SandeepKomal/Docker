@@ -7,7 +7,6 @@ services:
       MYSQL_ROOT_PASSWORD: adminadmin
       MYSQL_USER: admin
       MYSQL_DATABASE: customerdb
-      MYSQL_TCP_PORT: 3306
     networks:
       springboot-mysql-net:
 
