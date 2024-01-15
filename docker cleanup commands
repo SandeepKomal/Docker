@@ -1,0 +1,9 @@
+####################### docker cleanup commands ####################
+
+docker system prune -----> Remove all stopped conatiners, unused networks and images.
+
+docker container prune ---> Remove all the stopped containers.
+
+docker image prune ---> Remove all unused images.
+
+docker volume prune ---> remove all unused volumes.
