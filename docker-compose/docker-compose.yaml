@@ -1,4 +1,4 @@
-version: '3.8'
+version: '3'
 
 services:
   mysqldb:
@@ -9,6 +9,8 @@ services:
       MYSQL_USER: admin
       MYSQL_PASSWORD: adminpassword
       MYSQL_DATABASE: customerdb
+    ports:
+      - 3306:3306
     networks:
       - springboot-mysql-net
 
