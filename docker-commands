@@ -50,3 +50,9 @@
 19) docker restart <container_name/id> ---> Rstart a  container.
 
 20) docker info ---> Display system wide information about docker.
+
+21) sudo lsof -i :80 ----> This will show you the process ID (PID) of the program using port 80. 
+
+22) sudo kill -9 <PID> ---> if the process using port 80 is not needed, you can stop it.Replace <PID> with the actual process ID you obtained from the lsof command.
+
+23) docker run -d --name nginx1 -p 8080:80 webapp1:latest --> This will map port 8080 on your host to port 80 in the container.
