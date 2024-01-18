@@ -8,3 +8,22 @@
 
 ![5](https://github.com/SandeepKomal/Docker/assets/99358567/e4cf3416-04ad-44cc-9e8f-4323f7481a1a)
 
+###########################Some Important Git Commands ##########################################
+
+![1](https://github.com/SandeepKomal/Docker/assets/99358567/30917834-35a2-4091-a0f4-63986ec02447)
+
+![2](https://github.com/SandeepKomal/Docker/assets/99358567/12763fd7-e1b3-4a71-8c03-a98e3af0906f)
+
+![3](https://github.com/SandeepKomal/Docker/assets/99358567/45914b6b-caff-433e-b76c-2c400b292d2b)
+
+![4](https://github.com/SandeepKomal/Docker/assets/99358567/13cf25ea-4b56-42c7-9a81-458ab8ca35d9)
+
+
+######## Download Docker commands pdf ##################3
+
+[docker commands pdf.pdf](https://github.com/SandeepKomal/Docker/files/13972929/docker.commands.pdf.pdf)
+
+
+
+
+
