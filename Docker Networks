@@ -7,9 +7,4 @@ docker network connect <network_name> <container_name/id> ---> Connect a contain
 
 docker network disconnect <network_name> <container_name/id> ---> DisConnect a container to a Network 
 
-## Development
 
-```
-npm install
-npm test
-```
