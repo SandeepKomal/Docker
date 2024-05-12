@@ -1,0 +1,22 @@
+# Use a base image with CentOS 7
+FROM centos:7
+
+# Install necessary packages
+RUN yum install -y httpd && \
+    yum clean all && \
+    rm -rf /var/cache/yum
+
+# Create a directory for the cloned repository
+RUN mkdir /test
+
+# Copy the repository files from the local system to the container
+COPY . /test
+
+# Move the repository files to the web server directory
+RUN mv /test/* /var/www/html/
+
+# Expose port 80
+EXPOSE 80
+
+# Start Apache web server
+CMD ["httpd", "-D", "FOREGROUND"]
