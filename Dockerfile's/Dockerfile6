@@ -1,14 +1,18 @@
-# Use the official Nginx image as base image
+# Use a base image with Nginx
 FROM nginx:latest
 
-# Remove the default Nginx configuration file
-RUN rm /etc/nginx/conf.d/default.conf
+# Create a directory for the cloned repository
+RUN mkdir /test
 
-# Copy all files from the current directory to the Nginx html directory
-COPY ./ /usr/share/nginx/html
+# Copy the repository files from the local system to the container
+COPY . /test
 
-# Expose port 80 to the outside world
+# Move the repository files to the web server directory for Nginx
+RUN mv /test/* /usr/share/nginx/html/
+
+# Expose port 80
 EXPOSE 80
 
-# Command to start Nginx
+# Start nginx
 CMD ["nginx", "-g", "daemon off;"]
+
