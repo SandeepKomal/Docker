@@ -15,7 +15,7 @@
 ########################## INSTALL DOCKER COMPOSE ###################
 
 1) download docker compose
-$ sudo curl -L "https://github.com/docker/compose/releases/download/1.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo curl -L "https://github.com/docker/compose/releases/download/1.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 
 2) Give permission
 $ sudo chmod +x /usr/local/bin/docker-compose
