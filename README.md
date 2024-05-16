@@ -38,8 +38,7 @@ on your current logged in user where you want to install docker.
 
 ![5](https://github.com/SandeepKomal/Docker/assets/99358567/e4cf3416-04ad-44cc-9e8f-4323f7481a1a)
 
-#######Some Important Git commands #######
-
+## Some Important Git commands 
 ![1](https://github.com/SandeepKomal/Docker/assets/99358567/30917834-35a2-4091-a0f4-63986ec02447)
 
 ![2](https://github.com/SandeepKomal/Docker/assets/99358567/12763fd7-e1b3-4a71-8c03-a98e3af0906f)
@@ -49,7 +48,7 @@ on your current logged in user where you want to install docker.
 ![4](https://github.com/SandeepKomal/Docker/assets/99358567/13cf25ea-4b56-42c7-9a81-458ab8ca35d9)
 
 
-########  Docker commands pdf ########
+## Docker commands pdf
 
 [docker commands pdf.pdf](https://github.com/SandeepKomal/Docker/files/13972929/docker.commands.pdf.pdf)
 
