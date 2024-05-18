@@ -2,7 +2,7 @@
 
 ### INSTALL DOCKER ON AMAZON LINUX
 
-```
+``` properties
 sudo yum update -y
 ```
 ```
