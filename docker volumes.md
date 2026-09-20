@@ -1,21 +1,35 @@
 docker volume ls  ---> to get the list of volumes
+
 docker volume rm volume name ---> to delete te specific volume
+
 docker volume create dockvol -----> to create docker volume 
+
 docker run -it --name javaapp2 -v dockvol:/var/storage -p 8081:8081 customer:3 (attaching the volume to the container)
+
 docker run -v <volume_name>:<container_path>
+
 docker exec -it javaapp2 /bin/sh or docker exec -it javaapp2 /bin/bash (login to container)
+
 docker volume ls ---> List volumes
+
 docker volume rm <volume_name> ---> Remove a volume 
 
 ############mounting then data into the storage folder############
+
 cd var ---> ls ---> storage ---> cd storage 
+
 mkdir folder name 
+
 cd folder name 
+
 sudo vi komal.txt  
 
 docker rm container name   ---------> Delete the container
+
 docker run -it --name javaapp3 -v dockvol:/home/potper -p 8081:8081 customer:3-----------> attach the volume to new conatiner (you can give any path to the volume)
+
 docker exec -it javaapp3 /bin/sh 
+
 cd home --> ls ---> cd potper ---> ls ---> cd home ---> ls ---> cd potper ---> ls ----> dockkom ---> cd dockkom---> ls -----> komal.txt
 
 
