@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+*.log
+node_modules
+target
+dist
+build
+coverage
+.idea
+.vscode
+.DS_Store
+*.swp
