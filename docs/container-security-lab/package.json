@@ -1,0 +1,6 @@
+{
+  "name": "docker-container-security-lab",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {"start": "node app.js"}
+}
