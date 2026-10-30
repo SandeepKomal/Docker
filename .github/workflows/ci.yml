@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  site:
+    name: Site tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Site scripts parse
+        run: for f in site/*.js; do node --check "$f"; done
+
+      - name: Site data is complete and well formed
+        run: node tests/check_site_data.js
+
+      - name: Playground simulator
+        run: node tests/check_playground.js
+
+      - name: Playground fuzzer
+        run: node tests/fuzz_playground.js
+
+      - name: Dockerfile X-ray
+        run: node tests/check_xray.js

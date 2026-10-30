@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="description" content="Learn Docker by fixing it: a browser playground with real incidents, a Dockerfile X-ray, quizzes, a troubleshooting reference and a cheat sheet.">
+  <title>Docker Quest</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="top">
+    <div class="wrap top-inner">
+      <a class="brand" href="#path" aria-label="Docker Quest home">
+        <img src="logo.svg" alt="" width="22" height="22">
+        Docker Quest
+      </a>
+      <nav aria-label="Sections">
+        <a href="#path" data-tab="path">Path</a>
+        <a href="#quiz" data-tab="quiz">Quiz</a>
+        <a href="#xray" data-tab="xray">Dockerfile X-ray</a>
+        <a href="#doctor" data-tab="doctor">Troubleshoot</a>
+        <a href="#cheats" data-tab="cheats">Cheat sheet</a>
+        <a href="#arch" data-tab="arch">Docker arch</a>
+      </nav>
+      <button type="button" class="kbd-btn" id="palette-open" aria-label="Search the site (Ctrl+K)"><span>Search</span><kbd id="palette-key">Ctrl K</kbd></button>
+      <a class="gh" id="gh-link" href="#">GitHub</a>
+    </div>
+  </header>
+
+  <main id="main" class="wrap">
+    <section id="tab-path" class="tab">
+      <div class="hero">
+        <div class="hero-text">
+          <img class="hero-logo" src="logo.svg" alt="" width="64" height="64">
+          <p class="eyebrow">Free and open source · MIT</p>
+          <h1>Build it small.<br>Run it safe.</h1>
+          <p class="sub">Images, layers, networks and volumes, learned by fixing real incidents in a Docker engine that runs in your browser. No install, no account.</p>
+          <div class="ctas">
+            <a class="pill primary" id="cta-start" href="#pg-title">Fix your first container</a>
+            <a class="pill" href="#xray">X-ray a Dockerfile</a>
+          </div>
+        </div>
+        <figure class="motif" aria-labelledby="motif-cap">
+          <figcaption id="motif-cap">One image, before and after</figcaption>
+          <div id="motif"></div>
+          <button type="button" class="linkish" id="motif-try">Shrink it yourself in the playground</button>
+        </figure>
+      </div>
+
+      <section class="playground" aria-labelledby="pg-title">
+        <div class="pg-head">
+          <div>
+            <h2 id="pg-title" class="section-title">Fix a broken container. Right here.</h2>
+            <p class="section-sub">Real incidents, real docker commands and real error messages.</p>
+          </div>
+          <p id="pg-goal" class="pg-goal" aria-live="polite"></p>
+        </div>
+        <div class="guide-slot" data-guide="playground"></div>
+        <div class="pg-scenarios" id="pg-scenarios" role="group" aria-label="Scenario"></div>
+        <div class="pg-body">
+          <div class="pg-main">
+            <div class="pg-term" id="pg-term">
+              <div class="pg-bar" aria-hidden="true"><span></span><span></span><span></span><em>dev@laptop · docker</em></div>
+              <div class="pg-out" id="pg-out" role="log" aria-live="polite" aria-label="Terminal output"></div>
+              <form class="pg-form" id="pg-form" autocomplete="off">
+                <span aria-hidden="true">$</span>
+                <input id="pg-input" type="text" spellcheck="false" autocapitalize="off" aria-label="Type a docker command" placeholder="docker ps -a">
+              </form>
+            </div>
+            <div class="pg-editor card" id="pg-editor" hidden></div>
+          </div>
+          <div class="pg-side">
+            <div class="pg-map" id="pg-map" aria-label="Engine view: networks, containers and images"></div>
+            <div class="pg-try" id="pg-try"></div>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="start-title">
+        <h2 id="start-title" class="section-title">Practise on your own machine</h2>
+        <div class="start-grid">
+          <div class="card">
+            <h3>Get Docker and the course</h3>
+            <p class="muted">Docker Engine on Linux, or Docker Desktop. Both are free for learning.</p>
+            <pre class="start"><code><span class="cm"># 1. Check Docker works</span>
+docker run --rm hello-world
+
+<span class="cm"># 2. Get the course</span>
+git clone https://github.com/SandeepKomal/Docker.git
+cd Docker
+
+<span class="cm"># 3. Start with the security lab</span>
+cd docs/container-security-lab
+docker build -f Dockerfile.baseline -t lab:baseline .</code></pre>
+          </div>
+          <div class="card">
+            <h3>Clean up when you are done</h3>
+            <p class="muted">Labs leave images and build cache behind. See what they use, then remove only what you no longer need.</p>
+            <pre class="start"><code>docker system df
+docker container prune
+docker image prune
+docker builder prune</code></pre>
+            <p class="start-note"><a data-repo="/blob/main/docker_installation.md" href="#">Install guide</a> · <a data-repo="/blob/main/docs/troubleshooting.md" href="#">Troubleshooting guide</a></p>
+          </div>
+        </div>
+      </section>
+
+      <h2 class="section-title" id="path-title">Your path</h2>
+      <div class="guide-slot" data-guide="path"></div>
+      <div class="stages" id="stages" role="list"></div>
+      <div class="progress-row">
+        <div class="bar" role="progressbar" aria-label="Levels complete" aria-valuemin="0" aria-valuemax="14" id="bar"><span id="bar-fill"></span></div>
+        <span id="bar-text"></span>
+      </div>
+      <div id="levels"></div>
+      <p class="note">Progress is saved in this browser only. Tick a level when you have done its lab.</p>
+    </section>
+
+    <section id="tab-quiz" class="tab" hidden>
+      <h2>Quiz</h2>
+      <p class="lede">Scenario-based questions for every level. You see right or wrong as soon as you answer, with the reasoning, which is where the learning is.</p>
+      <div class="guide-slot" data-guide="quiz"></div>
+      <label class="field">Practise
+        <select id="quiz-level"></select>
+      </label>
+      <button type="button" class="pill small-pill quiz-again" id="quiz-again">Start again with new order</button>
+      <div id="quiz-list"></div>
+    </section>
+
+    <section id="tab-xray" class="tab" hidden>
+      <h2>Dockerfile X-ray</h2>
+      <p class="lede">Paste a Dockerfile to see what every line does, which lines are risky, and what is missing. Or open one of this repository's own.</p>
+      <div class="guide-slot" data-guide="xray"></div>
+      <div class="seg" id="xray-pick" role="tablist" aria-label="Dockerfile"></div>
+      <div class="xray-paste card" id="xray-edit" hidden>
+        <label for="xray-input" class="xray-paste-label">Paste a Dockerfile</label>
+        <textarea id="xray-input" rows="10" spellcheck="false" autocapitalize="off" placeholder="FROM node:22-alpine&#10;WORKDIR /app&#10;..."></textarea>
+        <p id="xray-error" class="xray-warn" hidden></p>
+        <div class="xray-paste-actions">
+          <button type="button" class="pill primary small-pill" id="xray-go">Explain</button>
+          <button type="button" class="pill small-pill" id="xray-example">Load an example</button>
+          <span class="note">Ctrl+Enter explains. Everything stays in your browser; do not paste real secrets.</span>
+        </div>
+      </div>
+      <div class="xray-paste card" id="xray-result" hidden>
+        <div class="xray-result-bar">
+          <div>
+            <p class="xray-result-title" id="xray-summary"></p>
+            <p class="note">Select any line to see what it does. Lines marked in amber are worth a second look.</p>
+          </div>
+          <div class="xray-result-actions" id="xray-actions">
+            <button type="button" class="pill small-pill" id="xray-edit-btn">Edit</button>
+            <button type="button" class="pill small-pill" id="xray-clear">Clear</button>
+          </div>
+        </div>
+        <div id="xray-review" aria-live="polite"></div>
+      </div>
+      <div class="xray" id="xray-view" hidden>
+        <ol id="xray-lines" class="code" aria-label="Dockerfile lines"></ol>
+        <aside id="xray-note" class="card" aria-live="polite"><p class="muted">Pick a line on the left.</p></aside>
+      </div>
+    </section>
+
+    <section id="tab-doctor" class="tab" hidden>
+      <h2>Troubleshooting reference</h2>
+      <p class="lede">What does <code>docker ps -a</code> say, or what error do you see? Pick the symptom for what it means, the likely causes, the commands that confirm which one it is, and where to practise the fix.</p>
+      <div class="guide-slot" data-guide="doctor"></div>
+      <label class="field">Search symptoms and errors
+        <input id="doctor-q" type="search" placeholder="137, ENOTFOUND, permission, port..." autocomplete="off">
+      </label>
+      <div id="doctor-list" class="doctor-groups"></div>
+      <div id="doctor-out"></div>
+    </section>
+
+    <section id="tab-cheats" class="tab" hidden>
+      <h2>Cheat sheet</h2>
+      <p class="lede">Type your own names once and every command fills in, ready to copy. Try runs a command in the playground, opening the scenario it needs. Lab marks the few that need Docker on your machine.</p>
+      <div class="guide-slot" data-guide="cheats"></div>
+      <div class="cheat-tools">
+        <label class="field">Search
+          <input id="cheat-q" type="search" placeholder="logs, network, prune..." autocomplete="off">
+        </label>
+        <details class="cheat-fill-box" id="cheat-fill-box">
+          <summary>Fill in your own names</summary>
+          <div class="cheat-fill" id="cheat-fill"></div>
+        </details>
+      </div>
+      <div id="cheat-out"></div>
+    </section>
+
+    <section id="tab-arch" class="tab" hidden>
+      <h2>Docker architecture</h2>
+      <p class="lede">What happens between typing <code>docker run</code> and a process running in a container. Point at a component, or tab to it, to read about it.</p>
+      <div class="arch" id="arch"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#path">
+          <img src="logo.svg" alt="" width="28" height="28">
+          Docker Quest
+        </a>
+        <p>Learn Docker by fixing real incidents: a playground, a Dockerfile X-ray, quizzes and references, free for everyone.</p>
+        <a class="pill small-pill foot-gh" data-repo="" href="#">GitHub source code</a>
+      </div>
+      <nav class="foot-col" aria-label="Learn">
+        <h2>Learn</h2>
+        <a href="#path">Path and playground</a>
+        <a href="#quiz">Quiz</a>
+        <a href="#xray">Dockerfile X-ray</a>
+        <a href="#doctor">Troubleshoot</a>
+        <a href="#cheats">Cheat sheet</a>
+        <a href="#arch">Docker arch</a>
+      </nav>
+      <nav class="foot-col" aria-label="Project">
+        <h2>Project</h2>
+        <a data-repo="/blob/main/docker_installation.md" href="#">Install Docker</a>
+        <a data-repo="/blob/main/CONTRIBUTING.md" href="#">Contributing</a>
+        <a data-repo="/issues" href="#">Report an issue</a>
+        <a data-repo="/blob/main/SECURITY.md" href="#">Security and privacy</a>
+        <a data-repo="/blob/main/LICENSE" href="#">MIT License</a>
+      </nav>
+    </div>
+    <div class="wrap foot-base">
+      <p>© 2024–2026 Sandeep Komal Pothu and contributors.</p>
+      <p>Open source under the <a data-repo="/blob/main/LICENSE" href="#">MIT License</a>. Built with no trackers, no cookies and nothing loaded from other sites.</p>
+      <p>Your progress (levels, quiz scores, solved scenarios, cheat sheet names) stays in this browser and is never sent anywhere. <button type="button" class="link-btn" id="forget">Clear it</button></p>
+      <p class="foot-tm">Docker® is a registered trademark of Docker, Inc. This project is independent and not affiliated with Docker, Inc.</p>
+    </div>
+  </footer>
+
+  <dialog id="palette" class="palette" aria-label="Search">
+    <input id="palette-input" type="text" placeholder="Jump to a level, scenario or section" autocomplete="off" aria-controls="palette-list">
+    <ul id="palette-list" role="listbox"></ul>
+    <p class="palette-foot muted"><kbd>↑</kbd> <kbd>↓</kbd> to move · <kbd>Enter</kbd> to open · <kbd>Esc</kbd> to close</p>
+  </dialog>
+
+  <script src="data.js"></script>
+  <script src="quiz-bank.js"></script>
+  <script src="app.js"></script>
+  <script src="playground.js"></script>
+  <script src="xray.js"></script>
+  <script src="architecture.js"></script>
+</body>
+</html>
