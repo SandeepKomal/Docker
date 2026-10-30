@@ -4,6 +4,21 @@ A hands-on Docker reference covering **Docker commands, images, containers, Dock
 
 This repository is a practical companion for DevOps and cloud engineers who want reusable Docker examples rather than only theory.
 
+## Docker Quest: practise in your browser
+
+The [Docker Quest site](https://sandeepkomal.github.io/Docker/) (source in [`site/`](./site/)) turns this repository into a hands-on course:
+
+- **Playground**: a `docker` CLI over a modelled engine with 46 real incidents, from a container that exits at once to OOM kills, Compose start order, registry limits and security hardening. Every scenario has its own link (`#play/<id>`).
+- **Troubleshoot**: paste an error message and get what it means, how to confirm it, the fix and how to prevent it. Every problem has its own link (`#fix/<id>`), and all of them are on one plain page, [problems.html](https://sandeepkomal.github.io/Docker/problems.html).
+- **Dockerfile X-ray**, a **quiz** for each of the 17 levels, a **cheat sheet** whose commands run in the playground, and an **architecture** diagram.
+
+Nothing is installed and nothing leaves your browser. To run the checks locally (Node.js, no dependencies):
+
+```bash
+node tests/check_site_data.js && node tests/check_playground.js && node tests/check_xray.js && node tests/fuzz_playground.js
+node tools/build-problems.js   # after changing troubleshooting entries in site/data.js
+```
+
 ## What you'll learn
 
 - Docker CLI fundamentals
