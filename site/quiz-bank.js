@@ -169,7 +169,15 @@ window.QUEST_QUIZ = {
         "Use ADD instead of COPY",
         "Put the install after COPY . ."
       ], answer: 1,
-      why: "The install step's cache depends only on the files copied before it. When those are just the dependency files, source edits leave it CACHED." }
+      why: "The install step's cache depends only on the files copied before it. When those are just the dependency files, source edits leave it CACHED." },
+    { q: "On CI, every build reinstalls dependencies even though the Dockerfile is ordered well. Why?",
+      options: [
+        "The Dockerfile is wrong",
+        "Each job runs on a fresh runner with an empty build cache, unless you import one with --cache-from",
+        "npm ci never caches",
+        "CI disables BuildKit"
+      ], answer: 1,
+      why: "Export the cache with --cache-to (registry or gha) and import it with --cache-from. The default docker driver cannot export it; a docker-container builder can." }
   ],
   "05": [
     { q: "A Node image is 1.6 GB. `docker history` shows `COPY . .` adding 310 MB. What helps most with that layer?",
@@ -441,7 +449,23 @@ window.QUEST_QUIZ = {
         "Memory limits need --memory-swap",
         "The host has no cgroups"
       ], answer: 1,
-      why: "Always give a unit: `--memory 512m`. Docker reads a bare number as bytes." }
+      why: "Always give a unit: `--memory 512m`. Docker reads a bare number as bytes." },
+    { q: "A service with `--cpus 0.1` times out under load, its logs are clean, and `docker stats` shows CPU stuck near 10%. What is happening?",
+      options: [
+        "A memory leak",
+        "The kernel throttles it at its CPU quota",
+        "The network is down",
+        "The disk is full"
+      ], answer: 1,
+      why: "A CPU limit makes an app slow, not broken. nr_throttled in /sys/fs/cgroup/cpu.stat confirms it, and `docker update --cpus` raises the quota at once." },
+    { q: "One container leaks processes until the host cannot start new ones. Which setting contains it?",
+      options: [
+        "--memory",
+        "--pids-limit",
+        "--cpus",
+        "--restart no"
+      ], answer: 1,
+      why: "The pids cgroup caps how many processes and threads a container may have, so a leak or fork bomb fails inside it instead of exhausting the host." }
   ],
   "13": [
     { q: "`df -h` shows the disk 90% full, but `docker system df` shows little. Where should you look next?",
@@ -509,7 +533,15 @@ window.QUEST_QUIZ = {
         "Use postgres:latest",
         "Run with --privileged"
       ], answer: 1,
-      why: "A major version cannot open another major's files. Pin database images to a major version and upgrade on purpose, with a backup." }
+      why: "A major version cannot open another major's files. Pin database images to a major version and upgrade on purpose, with a backup." },
+    { q: "A pull from your company registry fails with `x509: certificate signed by unknown authority`. What is the right fix?",
+      options: [
+        "Add it to insecure-registries",
+        "Install the company CA in /etc/docker/certs.d/<registry>/ca.crt (or the system store)",
+        "Use http://",
+        "Disable TLS in the registry"
+      ], answer: 1,
+      why: "The certificate is fine; this machine does not trust its CA. Adding the CA keeps verification on; insecure-registries turns it off." }
   ],
   "15": [
     { q: "Why is `ENV DB_PASSWORD=...` in a Dockerfile a problem?",
@@ -543,7 +575,23 @@ window.QUEST_QUIZ = {
         "Port scans ignore firewalls",
         "PostgreSQL opens the port itself"
       ], answer: 1,
-      why: "Do not publish internal services: reach them over a Docker network, or bind with `-p 127.0.0.1:5432:5432`." }
+      why: "Do not publish internal services: reach them over a Docker network, or bind with `-p 127.0.0.1:5432:5432`." },
+    { q: "A dashboard container mounts `/var/run/docker.sock:ro`. Is that safe?",
+      options: [
+        "Yes, it is read-only",
+        "No: :ro covers the file, not the API calls, so it can still start a privileged container and own the host",
+        "Yes, if the dashboard runs as non-root",
+        "Only on Docker Desktop"
+      ], answer: 1,
+      why: "Socket access is full Docker API access. Give such tools a socket proxy that allows only the calls they need." },
+    { q: "A scan finds critical vulnerabilities in packages your app never uses. What removes them for good?",
+      options: [
+        "Filtering the scan to medium",
+        "A smaller base image (slim, alpine or distroless), rebuilt regularly",
+        "Ignoring them",
+        "Running as root"
+      ], answer: 1,
+      why: "Most findings come from the base image. Fewer packages means fewer findings; regular rebuilds pick up fixes." }
   ],
   "16": [
     { q: "The disk is full. What should you run first?",

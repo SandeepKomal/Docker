@@ -304,6 +304,7 @@
         }
         if (x.uid === 0 && !x.caps.has("CHOWN")) return { code: 1, logs: [`${t} chown("/var/cache/nginx/client_temp", 101) failed (1: Operation not permitted)`, 'nginx: [emerg] chown("/var/cache/nginx/client_temp", 101) failed (1: Operation not permitted)'] };
         const logs = [`${stamp(x.e.now)} [notice] 1#1: using the "epoll" event method`, `${stamp(x.e.now)} [notice] 1#1: nginx/1.27.3`, `${stamp(x.e.now)} [notice] 1#1: start worker processes`];
+        if (x.e.pidsFree() < 64) return { hung: true, logs: [...logs, `${stamp(x.e.now)} [alert] 1#1: fork() failed while spawning "worker process" (11: Resource temporarily unavailable)`] };
         const missing = ["SETGID", "SETUID"].find((cap) => x.uid === 0 && !x.caps.has(cap));
         if (missing) return { hung: true, logs: [...logs, `${stamp(x.e.now)} [notice] 1#1: start worker process 29`, `${stamp(x.e.now)} [emerg] 29#29: ${missing.toLowerCase()}(101) failed (1: Operation not permitted)`, `${stamp(x.e.now)} [alert] 1#1: worker process 29 exited with fatal code 2 and cannot be respawned`] };
         return { logs };
@@ -339,6 +340,17 @@
         if (missing) return missing;
         if (!x.env.QUEUE_URL) return { code: 1, logs: ["worker: starting", "worker: fatal: QUEUE_URL is not set (where to read jobs from)"] };
         return { logs: ["worker: starting", `worker: reading jobs from ${x.env.QUEUE_URL}`] };
+      }
+    },
+    pricing: { port: 8080, cpuNeed: 0.8, body: "pricing: 1,204 prices recalculated", start: (x) => x.module("express") || { logs: ["pricing: listening on :8080", "pricing: recalculating prices every request (CPU heavy)"] } },
+    resizer: { port: 8080, body: "resizer: ok", start: (x) => x.module("sharp") || { logs: ["resizer: listening on :8080", "resizer: starting one convert process per image"] } },
+    proxy: { port: 2375, start: () => ({ logs: ["socket-proxy: forwarding allowed API calls to /var/run/docker.sock on :2375"] }) },
+    dashboard: {
+      port: 8080,
+      body: (e, c) => (c.proc.via ? `dashboard: containers running: ${e.containers.filter((o) => o.state === "running").length}` : "dashboard: cannot reach Docker"),
+      start(x) {
+        const a = dockerAccess(x.e, x.c, x.env);
+        return a.error ? { logs: [`dashboard: ${a.error}`] } : { via: a.via, logs: [`dashboard: reading containers from ${a.via === "proxy" ? x.env.DOCKER_HOST : "unix:///var/run/docker.sock"}`] };
       }
     },
     chatty: { port: 8080, body: "chatty: ok", start: (x) => x.module("express") || { logs: ["chatty: listening on :8080", ...[1, 2, 3].map((n) => `chatty: GET /api/items 200 ${n}ms request_id=${hexOf("r" + n).slice(0, 8)}`)] } },
@@ -463,11 +475,16 @@
       this.hubLimit = Boolean(scenario.hubLimit);
       this.capacity = 40 * GB;
       this.hostServices = {};
+      this.builder = "default";
+      this.builders = { default: "docker" };
+      this.remoteCache = {};
+      this.ephemeral = Boolean(scenario.ciRunner);
       this.daemon = { up: true, conf: {} };
       this.groups = ["dev", "sudo", "docker"];
       this.pendingGroups = [];
       this.firewall = ["22/tcp                     ALLOW       Anywhere"];
-      this.host = { "/home": D(), [HOME]: D(1000), "/srv": D(), "/tmp": D(0, 0o1777), "/etc": D(), "/etc/docker": D(), "/var/run/docker.sock": { socket: true, uid: 0, gid: 998, mode: 0o660, size: 0 } };
+      this.host = { "/home": D(), [HOME]: D(1000), "/srv": D(), "/tmp": D(0, 0o1777), "/etc": D(), "/etc/docker": D(), "/usr/local/share/ca-certificates": D(), "/var/run/docker.sock": { socket: true, uid: 0, gid: 998, mode: 0o660, size: 0 },
+        "/etc/shadow": { text: "root:*:20026:0:99999:7:::\ndaemon:*:20026:0:99999:7:::\ndev:!:20026:0:99999:7:::\n", uid: 0, gid: 42, mode: 0o640 } };
       for (const [p, e] of Object.entries(scenario.files || {})) this.host[p] = { uid: 1000, gid: 1000, mode: e.dir ? 0o755 : 0o644, v: 0, ...e };
       this.addNetwork("bridge", "bridge", "172.17.0.0/16");
       this.addNetwork("host", "host");
@@ -511,7 +528,7 @@
         comment: /^# debian|^ADD file/.test(by) ? "debuerreotype 0.15" : "buildkit.dockerfile.v0"
       }));
       const img = {
-        id: hexOf(`image|${key}`), digest: hexOf(`digest|${key}`), created, layers, os: b.os, arch: "amd64",
+        id: hexOf(`image|${key}`), digest: hexOf(`digest|${key}`), created, layers, os: b.os, arch: "amd64", base: key,
         bins: new Set([...BINS[b.os], ...b.bins]), users: { root: [0, 0], ...(b.users || {}) },
         fs: { ...BASE_FS, ...(b.fs || {}) },
         config: { Env: ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", ...(b.env || [])], Cmd: b.cmd, Entrypoint: b.entrypoint || null, WorkingDir: "", User: "", ExposedPorts: b.expose || [], StopSignal: b.stop || null, Volumes: b.vol || [], Healthcheck: null }
@@ -548,6 +565,7 @@
       if (host === "docker.io" && this.hubLimit && !this.logins.has("docker.io") && !(img && this.tags[r] === img.id)) {
         return { error: "toomanyrequests: You have reached your unauthenticated pull rate limit. https://www.docker.com/increase-rate-limit" };
       }
+      if (remote && remote.privateCA && !this.trusts(host)) return { error: `Get "https://${host}/v2/": tls: failed to verify certificate: x509: certificate signed by unknown authority` };
       if (remote && remote.private && !this.logins.has(host)) return { error: `Head "https://${host === "docker.io" ? "registry-1.docker.io" : host}/v2/${path}/manifests/${tag}": unauthorized` };
       if (!img) {
         const known = Object.keys(BASES).some((k) => k.startsWith(repo + ":")) || Object.keys(this.remote).some((k) => k.startsWith(repo + ":"));
@@ -563,9 +581,9 @@
     }
 
     // Setup helper: move a local image to a registry, as if it had been pushed there.
-    publish(ref, priv) {
+    publish(ref, priv, privateCA) {
       const img = this.image(ref);
-      this.remote[normRef(ref)] = { image: img, private: Boolean(priv) };
+      this.remote[normRef(ref)] = { image: img, private: Boolean(priv), privateCA: Boolean(privateCA) };
       delete this.tags[normRef(ref)];
       if (!this.tagsOf(img).length) delete this.images[img.id];
     }
@@ -574,6 +592,10 @@
       const d = diskUse(this);
       return 7.5 * GB + d.imageSize + d.cacheSize + d.volumeSize + this.containers.reduce((n, c) => n + (c.logBytes || 0), 0);
     }
+    // The host's process table, for --pids-limit: pid_max minus what everything uses.
+    pidsFree() { return 32768 - 420 - this.containers.filter((c) => c.state === "running").reduce((n, c) => n + (c.pids || 11), 0); }
+    // A registry with a certificate from a private CA is trusted through certs.d or the system store.
+    trusts(host) { return Boolean(this.host[`/etc/docker/certs.d/${host}/ca.crt`]) || this.systemCA || (this.daemon.conf["insecure-registries"] || []).includes(host); }
     capsOf(c) {
       if (c.privileged) return new Set([...DEFAULT_CAPS, "SYS_ADMIN", "NET_ADMIN", "SYS_PTRACE"]);
       const drop = c.capDrop.map(capName);
@@ -669,7 +691,8 @@
         target = r.target;
         if (!target || !target.proc.listens.includes(port) || (target.proc.loopback && target !== c)) return refused(host);
       }
-      if (target.proc.hung) return { code: 28, text: "curl: (28) Operation timed out after 5001 milliseconds with 0 bytes received" };
+      const def0 = APPS[target.proc.app] || {};
+      if (target.proc.hung || (def0.cpuNeed && target.cpus && target.cpus < def0.cpuNeed)) return { code: 28, text: "curl: (28) Operation timed out after 5001 milliseconds with 0 bytes received" };
       if (target.proc.app === "redis") return { code: 1, text: "curl: (1) Received HTTP/0.9 when not allowed" };
       const body = APPS[target.proc.app].body;
       if (!body) return { code: 52, text: "curl: (52) Empty reply from server" };
@@ -848,6 +871,20 @@
     }
   }
 
+  // How a process in a container reaches the Docker API: a socket proxy over
+  // DOCKER_HOST, the mounted socket itself, or nothing.
+  function dockerAccess(e, c, env) {
+    const m = /^tcp:\/\/([^:/]+):(\d+)/.exec(env.DOCKER_HOST || "");
+    if (m) {
+      const r = e.resolve(c, m[1]);
+      const t = r && r.target;
+      if (!t || t.proc.app !== "proxy" || !t.mounts.some((x) => x.source === "/var/run/docker.sock")) return { error: `Cannot connect to the Docker daemon at ${env.DOCKER_HOST}. Is the docker daemon running?` };
+      return { via: "proxy", proxyEnv: Object.fromEntries([...e.images[t.imageId].config.Env, ...t.env].map((kv) => [kv.split("=")[0], kv.slice(kv.indexOf("=") + 1)])) };
+    }
+    if (c.mounts.some((x) => x.type === "bind" && x.source === "/var/run/docker.sock" && x.dest === "/var/run/docker.sock")) return { via: "socket" };
+    return { error: "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?" };
+  }
+
   // The daemon stops its containers; on start it reads daemon.json and restarts those with a policy.
   function daemonStop(e) {
     for (const c of e.containers) if (c.state === "running" || c.state === "restarting") { e.stop(c); c.stopped = false; }
@@ -868,6 +905,7 @@
       }
     } else e.daemon.conf = {};
     e.daemon.up = true;
+    e.systemCA = Boolean(e.caPending);
     for (const c of e.containers) if (c.state === "exited" && !c.stopped && (c.restart === "always" || c.restart === "unless-stopped")) e.start(c);
     return null;
   }
@@ -881,7 +919,8 @@
       env: o.env, tty: Boolean(o.tty), interactive: Boolean(o.interactive), rm: Boolean(o.rm), ports: o.ports, mounts: o.mounts,
       netMode: o.netMode || "bridge", nets, links: o.links || {}, memory: o.memory || 0, memorySwap: o.memorySwap || 0, restart: o.restart || "no",
       oomKillDisable: Boolean(o.oomKillDisable), privileged: Boolean(o.privileged), readOnly: Boolean(o.readOnly),
-      capDrop: o.capDrop || [], capAdd: o.capAdd || [], extraHosts: o.extraHosts || {}, init: Boolean(o.init), health: o.health || null, log: o.log || { type: "json-file", opts: {} }, logBytes: 0, platform: o.platform || "",
+      capDrop: o.capDrop || [], capAdd: o.capAdd || [], extraHosts: o.extraHosts || {}, init: Boolean(o.init),
+      cpus: o.cpus || 0, cpuShares: o.cpuShares || 0, cpusetCpus: o.cpusetCpus || "", pidsLimit: o.pidsLimit || 0, pids: 0, health: o.health || null, log: o.log || { type: "json-file", opts: {} }, logBytes: 0, platform: o.platform || "",
       state: "created", exitCode: 0, oom: false, created: e.now, startedAt: 0, finishedAt: 0, logs: [], proc: { listens: [] }, hostname: id.slice(0, 12)
     };
   }
@@ -936,7 +975,27 @@
     const target = a.filter((x) => !x.startsWith("-"));
     switch (b) {
       case "ls": return lsLines(view, wd, a, nameOf);
-      case "cat": return catLines(view, wd, a, "cat");
+      case "cat": {
+        if (a.includes("/sys/fs/cgroup/cpu.stat")) {
+          const def = APPS[c.proc.app] || {};
+          const thr = def.cpuNeed && c.cpus && c.cpus < def.cpuNeed;
+          return say(["usage_usec 812345678", "user_usec 790112345", "system_usec 22233333", `nr_periods 36000`, `nr_throttled ${thr ? 35874 : 0}`, `throttled_usec ${thr ? 3226611000 : 0}`].join("\n"));
+        }
+        if (a.includes("/sys/fs/cgroup/pids.max")) return say(c.pidsLimit ? String(c.pidsLimit) : "max");
+        return catLines(view, wd, a, "cat");
+      }
+      case "docker": {
+        const env = Object.fromEntries([...img.config.Env, ...c.env].map((kv) => [kv.split("=")[0], kv.slice(kv.indexOf("=") + 1)]));
+        const acc = dockerAccess(e, c, env);
+        if (acc.error) return say(acc.error, "warn");
+        // The proxy lets reads through when CONTAINERS=1, and writes only when POST=1.
+        if (acc.via === "proxy") {
+          const read = /^(ps|images|inspect|version|info|logs)$/.test(a[0] || "");
+          const allowed = a[0] === "version" || (read && acc.proxyEnv.CONTAINERS === "1") || (!read && acc.proxyEnv.POST === "1");
+          if (!allowed) return say("Error response from daemon: <html><body><h1>403 Forbidden</h1>\nRequest forbidden by administrative rules.\n</body></html>", "warn");
+        }
+        return docker(e, a);
+      }
       case "echo": return say(a.join(" "));
       case "true": case "sleep": return say("");
       case "pg_isready": return c.proc.app === "postgres" && c.proc.readyAt <= e.now ? say("/var/run/postgresql:5432 - accepting connections") : { code: 2, lines: [["/var/run/postgresql:5432 - no response", "warn"]] };
@@ -988,7 +1047,7 @@
   // --- docker ------------------------------------------------------------------
 
   const RUN_SPEC = flagSpec("d|detach i|interactive t|tty rm P|publish-all read-only privileged init oom-kill-disable no-healthcheck help",
-    "name p|publish v|volume e|env net|network m|memory memory-swap u|user restart entrypoint w|workdir link mount cpus pids-limit tmpfs cap-drop cap-add security-opt network-alias h|hostname l|label platform log-driver log-opt health-cmd health-interval env-file pull add-host",
+    "name p|publish v|volume e|env net|network m|memory memory-swap u|user restart entrypoint w|workdir link mount cpus pids-limit tmpfs cap-drop cap-add security-opt network-alias h|hostname l|label platform log-driver log-opt health-cmd health-interval env-file pull add-host cpu-shares cpuset-cpus",
     "publish volume env link mount tmpfs cap-drop cap-add security-opt network-alias label log-opt add-host");
   const LOG_DRIVERS = ["json-file", "local", "none", "syslog", "journald", "gelf", "fluentd", "awslogs", "splunk", "etwlogs", "gcplogs"];
   const fail = (lines, cls) => ({ code: 1, lines: (Array.isArray(lines) ? lines : [lines]).map((l) => [l, cls || "warn"]) });
@@ -1080,6 +1139,7 @@
         PortBindings: Object.fromEntries(c.ports.map((p) => [`${p.cont}/tcp`, [{ HostIp: p.hostIp || "", HostPort: String(p.host) }]])),
         RestartPolicy: { Name: c.restart, MaximumRetryCount: 0 }, AutoRemove: c.rm, Privileged: c.privileged, ReadonlyRootfs: c.readOnly,
         Memory: c.memory, MemorySwap: c.memorySwap, OomKillDisable: c.oomKillDisable, Init: c.init || null,
+        NanoCpus: Math.round((c.cpus || 0) * 1e9), CpuShares: c.cpuShares || 0, CpusetCpus: c.cpusetCpus || "", PidsLimit: c.pidsLimit || null,
         ExtraHosts: Object.keys(c.extraHosts || {}).length ? Object.entries(c.extraHosts).map(([n, ip]) => `${n}:${ip}`) : null, CapAdd: c.capAdd.length ? c.capAdd : null, CapDrop: c.capDrop.length ? c.capDrop : null, LogConfig: { Type: c.log.type, Config: c.log.opts }
       },
       Mounts: c.mounts.map((m) => ({ Type: m.type, ...(m.type === "volume" ? { Name: m.name } : {}), Source: m.type === "bind" ? m.source : m.type === "volume" ? `/var/lib/docker/volumes/${m.name}/_data` : "", Destination: m.dest, Driver: m.type === "volume" ? "local" : undefined, Mode: m.ro ? "ro" : "", RW: !m.ro, Propagation: m.type === "bind" ? "rprivate" : "" })),
@@ -1224,6 +1284,7 @@
       env: (f.env || []).filter((x) => x.includes("=")), tty: f.tty, interactive: f.interactive, rm: f.rm, ports: ports.ports, mounts: m.mounts, netMode,
       aliases: f["network-alias"], links, memory, memorySwap, restart: f.restart, oomKillDisable: f["oom-kill-disable"], privileged: f.privileged, readOnly: f["read-only"],
       capDrop: f["cap-drop"], capAdd: f["cap-add"], platform: f.platform, init: f.init,
+      cpus: Number(f.cpus) || 0, cpuShares: Number(f["cpu-shares"]) || 0, cpusetCpus: f["cpuset-cpus"] || "", pidsLimit: Number(f["pids-limit"]) || 0,
       extraHosts: Object.fromEntries((f["add-host"] || []).map((h) => { const [n, ip] = h.split(/:(.*)/); return [n, ip === "host-gateway" ? "172.17.0.1" : ip]; })),
       health: f["no-healthcheck"] ? ["NONE"] : f["health-cmd"] ? ["CMD-SHELL", f["health-cmd"]] : null,
       log: { type: driver, opts: f["log-opt"] ? Object.fromEntries(f["log-opt"].map((kv) => [kv.split("=")[0], kv.slice(kv.indexOf("=") + 1)])) : !f["log-driver"] ? { ...(e.daemon.conf["log-opts"] || {}) } : {} }
@@ -1367,7 +1428,7 @@
   }
 
   function dUpdate(e, args) {
-    const p = parseFlags(args, flagSpec("", "m|memory memory-swap restart cpus pids-limit", ""), false);
+    const p = parseFlags(args, flagSpec("", "m|memory memory-swap restart cpus pids-limit cpu-shares cpuset-cpus", ""), false);
     if (p.error) return usage("update", p.error);
     const f = p.flags;
     return containersArg(e, p.pos, "update", (c) => {
@@ -1383,6 +1444,10 @@
       c.memory = mem;
       c.memorySwap = swap;
       if (f.restart) c.restart = f.restart;
+      if (f.cpus !== undefined) { if (!(Number(f.cpus) >= 0)) return fail(`invalid argument "${f.cpus}" for "--cpus" flag: failed to parse ${f.cpus} as a rational number`); c.cpus = Number(f.cpus); }
+      if (f["cpu-shares"] !== undefined) c.cpuShares = Number(f["cpu-shares"]) || 0;
+      if (f["cpuset-cpus"] !== undefined) c.cpusetCpus = f["cpuset-cpus"];
+      if (f["pids-limit"] !== undefined) c.pidsLimit = Number(f["pids-limit"]) > 0 ? Number(f["pids-limit"]) : 0;
       if (c.state === "restarting" && c.restart === "no") c.state = "exited";
       return ok(c.name === p.pos.find((n) => e.container(n) === c) ? c.name : c.id.slice(0, 12));
     });
@@ -1645,7 +1710,7 @@
       if (cmd === "apk") {
         if (!st.bins.has("ash")) return { code: 127, out: ["/bin/sh: apk: not found"] };
         const pkgs = pos.slice(1);
-        pkgs.forEach((x) => st.bins.add(x));
+        pkgs.forEach((x) => st.bins.add({ "docker-cli": "docker" }[x] || x));
         fs[`/usr/lib/apk/${pkgs.join("-") || "none"}`] = { size: pkgs.length * 2.4 * MB };
         if (!opts.includes("--no-cache")) fs["/var/cache/apk/APKINDEX.tar.gz"] = { size: 2.5 * MB };
         out.push(`OK: ${pkgs.length * 3 + 7} MiB in ${pkgs.length + 15} packages`);
@@ -1670,10 +1735,17 @@
   }
 
   function dBuild(e, args) {
-    const p = parseFlags(args, flagSpec("no-cache q|quiet pull squash load push rm", "t|tag f|file build-arg target progress platform network secret", "tag build-arg secret"), false);
+    const p = parseFlags(args, flagSpec("no-cache q|quiet pull squash load push rm", "t|tag f|file build-arg target progress platform network secret cache-from cache-to builder", "tag build-arg secret"), false);
     if (p.error) return usage("buildx build", p.error);
     if (p.pos.length !== 1) return fail(['ERROR: "docker buildx build" requires exactly 1 argument.', "See 'docker buildx build --help'.", "", "Usage:  docker buildx build [OPTIONS] PATH | URL | -", "", "Start a build"]);
     if (p.flags.push || String(p.flags.platform || "").includes(",")) return LAB("Pushing or building for several platforms");
+    const builder = p.flags.builder || e.builder;
+    const driver = e.builders[builder];
+    if (!driver) return fail(`ERROR: no builder "${builder}" found`);
+    if (p.flags["cache-to"] && driver === "docker") return fail(["ERROR: Cache export is not supported for the docker driver.", "Switch to a different driver, or turn on the containerd image store, and try again.", "Learn more at https://docs.docker.com/go/build-cache-backends/"]);
+    const cacheRef = (v) => (v ? (/ref=([^,]+)/.exec(v) || [null, /=/.test(v) ? null : v])[1] : null);
+    // A CI runner starts every job with an empty build cache.
+    if (e.ephemeral) e.cache.clear();
     if (p.flags.squash) return fail("WARNING: experimental flag squash is removed with BuildKit. You should squash inside build using a multi-stage Dockerfile for efficiency.");
     const ctx = join(e.cwd, p.pos[0]);
     if (!stat(e.host, ctx)) return fail(`ERROR: unable to prepare context: path "${p.pos[0]}" not found`);
@@ -1736,6 +1808,9 @@
     for (const ref of [...new Set(externals)]) row(`[internal] load metadata for ${fullRef(normRef(ref))}`, 0.6);
     row("[internal] load .dockerignore", 0);
     row(`=> transferring context: ${bytes2(ign ? entrySize(ign) : 2)}`, 0);
+    const from = cacheRef(p.flags["cache-from"]);
+    if (from && e.remoteCache[from]) { for (const [k, v] of e.remoteCache[from]) e.cache.set(k, v); row(`importing cache manifest from ${from}`, 0.4); }
+    else if (from) row(`ERROR importing cache manifest from ${from}`, 0.3);
     row("[internal] load build context", ctxSize / (80 * MB) + 0.1);
     row(`=> transferring context: ${bytes2(ctxSize)}`, ctxSize / (80 * MB));
 
@@ -1765,11 +1840,11 @@
       const parent = stageOf(s.from);
       if (parent && parent.index < i) {
         const r = results[parent.index];
-        st = { fs: r.fs, cfg: { ...r.cfg }, users: { ...r.users }, groups: { ...r.groups }, bins: new Set(r.bins), layers: [...r.layers], key: r.key, os: r.os, args: {} };
+        st = { fs: r.fs, cfg: { ...r.cfg }, users: { ...r.users }, groups: { ...r.groups }, bins: new Set(r.bins), layers: [...r.layers], key: r.key, os: r.os, args: {}, base: r.base };
       } else {
         const base = e.image(s.from) || e.registry(s.from);
         if (!base) return failWith(`[${label}1/${n}] FROM ${fullRef(normRef(s.from))}`, null, `${s.from}: failed to resolve source metadata for ${fullRef(normRef(s.from))}: pull access denied, repository does not exist or may require authorization: server message: insufficient_scope: authorization failed`);
-        st = { fs: { ...base.fs }, cfg: JSON.parse(JSON.stringify(base.config)), users: { ...base.users }, groups: {}, bins: new Set(base.bins), layers: [...base.layers], key: `base:${base.id}:${arch}`, os: base.os, args: {} };
+        st = { fs: { ...base.fs }, cfg: JSON.parse(JSON.stringify(base.config)), users: { ...base.users }, groups: {}, bins: new Set(base.bins), layers: [...base.layers], key: `base:${base.id}:${arch}`, os: base.os, args: {}, base: base.base };
         row(`[${label}1/${n}] FROM ${fullRef(normRef(s.from))}@sha256:${(base.digest || base.id).slice(0, 64)}`, 0);
       }
       doneCount++;
@@ -1906,18 +1981,28 @@
     const r = results[final];
     const id = hexOf(`image|${r.key}`);
     const existing = e.images[id];
-    const img = existing || { id, created: e.now, layers: r.layers, fs: r.fs, users: r.users, bins: r.bins, os: r.os, arch, config: r.cfg, built: e.ready };
+    const img = existing || { id, created: e.now, layers: r.layers, fs: r.fs, users: r.users, bins: r.bins, os: r.os, arch, config: r.cfg, built: e.ready, base: r.base };
     if (e.ready) img.built = true;
     const exportSecs = existing ? 0 : Math.min(9, e.imageSize(img) / (400 * MB));
     total += exportSecs;
     row("exporting to image", exportSecs);
     row("=> exporting layers", exportSecs);
     row(`=> writing image sha256:${id}`, 0);
-    for (const t of p.flags.tag || []) { row(`=> naming to ${fullRef(normRef(t))}`, 0); e.tag(t, img); }
-    if (!(p.flags.tag || []).length) e.images[id] = img;
+    // The docker-container driver keeps results in its own cache unless told to --load them.
+    const load = driver === "docker" || p.flags.load;
+    if (load) for (const t of p.flags.tag || []) { row(`=> naming to ${fullRef(normRef(t))}`, 0); e.tag(t, img); }
+    if (load && !(p.flags.tag || []).length) e.images[id] = img;
+    const to = cacheRef(p.flags["cache-to"]);
+    if (to) {
+      e.remoteCache[to] = new Map(e.cache);
+      row("exporting cache to registry", 1.1);
+      row("=> preparing build cache for export", 0.4);
+      row(`=> writing cache manifest sha256:${hexOf("cache" + to + e.cache.size)}`, 0.2);
+    }
+    if (!load) log.push(["WARNING: No output specified with docker-container driver. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker images use --load", "warn"]);
     e.lastBuild = { steps, image: id, tags: (p.flags.tag || []).map(normRef), user: e.ready };
     if (p.flags.quiet) return ok(`sha256:${id}`);
-    return { code: 0, lines: [[`[+] Building ${total.toFixed(1)}s (${stepTotal + 3}/${stepTotal + 3}) FINISHED`.padEnd(66) + "docker:default", ""], ...log] };
+    return { code: 0, lines: [[`[+] Building ${total.toFixed(1)}s (${stepTotal + 3}/${stepTotal + 3}) FINISHED`.padEnd(66) + `${driver === "docker" ? "docker" : "docker-container"}:${builder}`, ""], ...log] };
   }
 
   // --- docker compose --------------------------------------------------------------
@@ -2155,6 +2240,80 @@
     return out;
   }
 
+  function buildx(e, [sub, ...args]) {
+    const p = parseFlags(args, flagSpec("use bootstrap", "name driver", ""), false);
+    if (p.error) return usage(`buildx ${sub}`, p.error);
+    if (sub === "create") {
+      const name = p.flags.name || `${["eager", "brave", "calm"][hash(String(e.now)) % 3]}_${["hopper", "turing"][hash(String(e.now + 1)) % 2]}`;
+      const driver = p.flags.driver || "docker-container";
+      if (!/^(docker-container|kubernetes|remote)$/.test(driver)) return fail(`ERROR: failed to find driver "${driver}"`);
+      if (e.builders[name]) return fail(`ERROR: existing instance for "${name}" but no append mode, specify the node name to make changes for existing instances`);
+      e.builders[name] = driver;
+      if (p.flags.use) e.builder = name;
+      return ok(name);
+    }
+    if (sub === "use") {
+      if (!e.builders[p.pos[0]]) return fail(`ERROR: run \`docker buildx ls\` to list available builders: no builder "${p.pos[0] || ""}" found`);
+      e.builder = p.pos[0];
+      return ok([]);
+    }
+    if (sub === "rm") {
+      const n = p.pos[0] || e.builder;
+      if (n === "default") return fail("ERROR: default is a docker driver builder and cannot be removed");
+      if (!e.builders[n]) return fail(`ERROR: no builder "${n}" found`);
+      delete e.builders[n];
+      if (e.builder === n) e.builder = "default";
+      return ok([`${n} removed`]);
+    }
+    const rows = [["NAME/NODE", "DRIVER/ENDPOINT", "STATUS", "BUILDKIT", "PLATFORMS"]];
+    for (const [n, d] of Object.entries(e.builders)) {
+      rows.push([`${n}${n === e.builder ? "*" : ""}`, d, "", "", ""], [` \\_ ${n}${d === "docker" ? "" : "0"}`, ` \\_ ${d === "docker" ? "default" : "unix:///var/run/docker.sock"}`, "running", d === "docker" ? "v0.17.3" : "v0.18.2", "linux/amd64 (+3)"]);
+    }
+    return { code: 0, lines: table(rows).map((l, i) => [l, i ? "row" : "head"]) };
+  }
+
+  // Practice findings for the simulated scanner. The IDs are invented, not real CVEs.
+  const VULNS = {
+    "node:22": [["QUEST-2026-0101", "CRITICAL", "openssl", "3.0.14-1~deb12u2", "3.0.15-1~deb12u1"], ["QUEST-2026-0102", "CRITICAL", "libexpat1", "2.5.0-1", "2.5.0-1+deb12u1"],
+      ["QUEST-2026-0110", "HIGH", "curl", "7.88.1-10+deb12u7", "7.88.1-10+deb12u8"], ["QUEST-2026-0111", "HIGH", "imagemagick", "8:6.9.11.60+dfsg-1.6", null],
+      ["QUEST-2026-0112", "HIGH", "git", "1:2.39.5-0+deb12u1", null], ["QUEST-2026-0113", "HIGH", "python3.11", "3.11.2-6", "3.11.2-6+deb12u4"], ["QUEST-2026-0120", "MEDIUM", "perl", "5.36.0-7+deb12u1", null]],
+    "node:22-slim": [["QUEST-2026-0120", "MEDIUM", "perl-base", "5.36.0-7+deb12u1", null], ["QUEST-2026-0130", "LOW", "libc6", "2.36-9+deb12u9", null]],
+    "node:22-alpine": [["QUEST-2026-0140", "LOW", "busybox", "1.36.1-r29", null]],
+    "nginx:1.27": [["QUEST-2026-0121", "MEDIUM", "libxml2", "2.9.14+dfsg-1.3~deb12u1", null]],
+    "redis:7.4": [["QUEST-2026-0131", "LOW", "libc6", "2.36-9+deb12u9", null]],
+    "postgres:17": [["QUEST-2026-0122", "MEDIUM", "libldap-2.5-0", "2.5.13+dfsg-5", null]],
+    "postgres:16": [["QUEST-2026-0122", "MEDIUM", "libldap-2.5-0", "2.5.13+dfsg-5", null]]
+  };
+  const SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
+  // An apt-get upgrade in the image removes the findings that have a fixed version.
+  function vulnsOf(img) {
+    const upgraded = img.layers.some((l) => /apt-get (-\S+ )*(dist-)?upgrade/.test(l.by));
+    return (VULNS[img.base] || []).filter((v) => !(upgraded && v[4]));
+  }
+  function scout(e, [sub, ...args]) {
+    if (!/^(cves|quickview)$/.test(sub || "")) return LAB(`docker scout ${sub || ""}`.trim());
+    const p = parseFlags(args, flagSpec("exit-code", "only-severity format", ""), false);
+    if (p.error) return usage(`scout ${sub}`, p.error);
+    const ref = p.pos[0];
+    const img = ref && (e.image(ref) || e.registry(ref));
+    if (!img) return fail(`ERROR could not find image: ${ref || "(none given)"}`);
+    const only = p.flags["only-severity"] ? p.flags["only-severity"].toUpperCase().split(",") : SEVERITIES;
+    const found = vulnsOf(img).filter((v) => only.includes(v[1]));
+    const pl = (n, word) => `${n} ${word}${n === 1 ? "" : word.endsWith("y") ? "" : "s"}`.replace(/y$/, n === 1 ? "y" : "ies");
+    const count = (list) => SEVERITIES.map((s) => `${String(list.filter((v) => v[1] === s).length).padStart(4)}${s[0]}`).join(" ");
+    const pkgs = img.base && img.base.includes("alpine") ? 224 : img.base && img.base.includes("slim") ? 318 : 712;
+    const lines = [[`    ✓ SBOM of image already cached, ${pkgs} packages indexed`, ""]];
+    if (sub === "quickview") {
+      lines.push(["", ""], [`  Target     │  ${ref.padEnd(18)}│ ${count(vulnsOf(img))}`, ""], [`  Base image │  ${(img.base || "unknown").padEnd(18)}│ ${count(VULNS[img.base] || [])}`, ""]);
+      return ok(lines);
+    }
+    lines.push(found.length ? [`    ✗ Detected ${pl(new Set(found.map((v) => v[2])).size, "vulnerable package")} with a total of ${pl(found.length, "vulnerability")}`, "warn"] : ["    ✓ No vulnerable package detected", ""],
+      ["    Practice findings: these IDs are made up for this playground, not real CVEs.", "dim"]);
+    for (const v of found) lines.push(["", ""], [`   ${count([v])}  ${v[2]} ${v[3]}`, ""], [`    ✗ ${v[1]} ${v[0]}`, v[1] === "CRITICAL" || v[1] === "HIGH" ? "warn" : ""], [`      Fixed version : ${v[4] || "not fixed"}`, "dim"]);
+    if (found.length) lines.push(["", ""], [`${pl(found.length, "vulnerability")} found in ${pl(new Set(found.map((v) => v[2])).size, "package")}`, ""], ...SEVERITIES.map((s) => [`  ${s.padEnd(9)} ${found.filter((v) => v[1] === s).length}`, ""]));
+    return { code: p.flags["exit-code"] && found.length ? 2 : 0, lines };
+  }
+
   function login(e, args, stdin) {
     const p = parseFlags(args, flagSpec("password-stdin", "u|username p|password", ""), false);
     if (p.error) return usage("login", p.error);
@@ -2181,6 +2340,7 @@
       builder: { build: "build", prune: "builder-prune" },
       system: { df: "df", prune: "system-prune", info: "info" }
     };
+    if (sub === "buildx" && /^(create|use|ls|rm)$/.test(rest[0] || "")) return buildx(e, rest);
     if (groups[sub]) {
       const to = groups[sub][rest[0]];
       if (!to) return LAB(`docker ${sub} ${rest[0] || ""}`.trim());
@@ -2198,6 +2358,7 @@
       }
       case "run": return dRun(e, rest, false);
       case "login": return login(e, rest, stdin);
+      case "scout": return scout(e, rest);
       case "logout": {
         const server = rest[0] && !/docker\.io/.test(rest[0]) ? rest[0] : "docker.io";
         if (!e.logins.has(server)) return ok(`Not logged in to ${server === "docker.io" ? "https://index.docker.io/v1/" : server}`);
@@ -2283,7 +2444,7 @@
         const limit = (c) => c.memory || 7.7 * 1024 * MiB;
         const mib = (b) => (b >= 1024 * MiB ? `${(b / 1024 / MiB).toFixed(2)}GiB` : `${(b / MiB).toFixed(2)}MiB`);
         return { code: 0, lines: table([["CONTAINER ID", "NAME", "CPU %", "MEM USAGE / LIMIT", "MEM %", "NET I/O", "BLOCK I/O", "PIDS"],
-          ...list.map((c) => [c.id.slice(0, 12), c.name, c.state === "running" ? "0.02%" : "0.00%", `${mib(mem(c))} / ${mib(limit(c))}`, `${(mem(c) / limit(c) * 100).toFixed(2)}%`, c.state === "running" ? "1.2kB / 0B" : "0B / 0B", "0B / 0B", c.state === "running" ? "11" : "0"])]).map((l, i) => [l, i ? "row" : "head"]) };
+          ...list.map((c) => [c.id.slice(0, 12), c.name, c.state !== "running" ? "0.00%" : APPS[c.proc.app] && APPS[c.proc.app].cpuNeed ? `${(Math.min(c.cpus || 9, APPS[c.proc.app].cpuNeed) * 100 - 0.03).toFixed(2)}%` : "0.02%", `${mib(mem(c))} / ${mib(limit(c))}`, `${(mem(c) / limit(c) * 100).toFixed(2)}%`, c.state === "running" ? "1.2kB / 0B" : "0B / 0B", "0B / 0B", c.state === "running" ? String(c.pids || 11) : "0"])]).map((l, i) => [l, i ? "row" : "head"]) };
       }
       case "df": {
         const p = simple(flagSpec("v|verbose", "format", ""));
@@ -2302,7 +2463,7 @@
         return prune(e, sub.split("-")[0], p.flags);
       }
       case "compose": return compose(e, rest);
-      case "push": case "scout": case "cp": case "events": case "attach": case "commit": case "save": case "load": case "export": case "import": case "context": case "swarm": case "service": case "stack": case "search": case "init": case "debug": case "top": case "pause": case "unpause": case "wait": case "diff": case "secret": case "config": case "plugin": case "trust": case "manifest": case "node":
+      case "push": case "cp": case "events": case "attach": case "commit": case "save": case "load": case "export": case "import": case "context": case "swarm": case "service": case "stack": case "search": case "init": case "debug": case "top": case "pause": case "unpause": case "wait": case "diff": case "secret": case "config": case "plugin": case "trust": case "manifest": case "node":
         return LAB(`docker ${sub}`);
       default:
         return fail([`docker: unknown command: docker ${sub}`, "", "Run 'docker --help' for more information"]);
@@ -2354,6 +2515,24 @@
       case "echo": return say(a[0] === "-n" ? a.slice(1).join(" ") : a.join(" "));
       case "printf": return { code: 0, lines: (a[0] || "").replace(/%s/g, () => a.splice(1, 1)[0] || "").replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\n$/, "").split("\n").map((l) => [l, ""]) };
       case "id": return say(sudo ? "uid=0(root) gid=0(root) groups=0(root)" : `uid=1000(dev) gid=1000(dev) groups=1000(dev),27(sudo)${e.groups.includes("docker") ? ",998(docker)" : ""}`);
+      case "cp": {
+        const [src, dst] = pos;
+        const s = e.host[join(e.cwd, src || "")];
+        if (!s || s.dir) return err(`cp: cannot stat '${src}': No such file or directory`);
+        let to = join(e.cwd, dst || "");
+        if (stat(e.host, to) && stat(e.host, to).dir) to = join(to, src.split("/").pop());
+        const parent = stat(e.host, join(to, ".."));
+        if (!parent) return err(`cp: cannot create regular file '${dst}': No such file or directory`);
+        if (!canWrite(parent, uid, uid)) return err(`cp: cannot create regular file '${dst}': Permission denied`);
+        e.host[to] = { ...s, uid, gid: uid };
+        return ok([]);
+      }
+      case "update-ca-certificates": {
+        if (!sudo) return err("Updating certificates in /etc/ssl/certs...\nln: failed to create symbolic link '/etc/ssl/certs/ca-certificates.crt': Permission denied");
+        const n = Object.keys(e.host).filter((p) => /^\/usr\/local\/share\/ca-certificates\/.+\.crt$/.test(p)).length;
+        e.caPending = n > 0;
+        return ok(["Updating certificates in /etc/ssl/certs...", `${n} added, 0 removed; done.`, "Running hooks in /etc/ca-certificates/update.d...", "done."]);
+      }
       case "groups": return say(sudo ? "root" : e.groups.join(" "));
       case "usermod": {
         if (!sudo) return err("usermod: Permission denied.\nusermod: cannot lock /etc/passwd; try again later.");
@@ -2611,6 +2790,13 @@
     e.tick(1000);
     // A restart policy tries again a few seconds after each exit.
     for (const c of e.containers) if (c.state === "restarting" && e.now - c.finishedAt >= 5000) e.start(c);
+    // The resizer leaks a process per request until its limit, or the host's, stops it.
+    for (const c of e.containers) {
+      if (c.state !== "running" || c.proc.app !== "resizer") continue;
+      const before = c.pids;
+      c.pids = Math.max(c.pids, Math.min(c.pids + 1500, c.pidsLimit || Infinity, c.pids + Math.max(0, e.pidsFree())));
+      if (c.pids === before && !c.logs[c.logs.length - 1].includes("EAGAIN")) c.logs.push("resizer: spawn failed: Error: spawn convert EAGAIN");
+    }
     let [cmd, ...a] = w;
     let sudo = false;
     if (cmd === "sudo") { sudo = true; [cmd, ...a] = a; if (!cmd) return fail("usage: sudo command"); }
@@ -3459,17 +3645,131 @@ ${healthcheck ? `    healthcheck:
       tries: ["docker ps -a", "docker logs db", "docker volume ls"]
     }
   );
+  const ORDERED_SHOP = 'FROM node:22-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci --omit=dev\nCOPY . .\nEXPOSE 3000\nCMD ["node", "server.js"]\n';
+  const lastNpm = (e) => { const b = e.lastBuild; return b && b.steps.find((s) => /^RUN .*\bnpm (ci|install)\b/.test(s.text)); };
+  const gate = (e, img) => vulnsOf(img).filter((v) => v[1] === "CRITICAL" || v[1] === "HIGH");
+  MORE.push(
+    {
+      id: "cpu", title: "Throttled CPU", level: "12",
+      story: "Since the cost review, the pricing service times out under load. Memory looks fine, and the logs show no errors.",
+      goal: "Get pricing answering on localhost:8080 again, keeping a CPU limit.",
+      done: "pricing answers, within a CPU limit it can live with.",
+      files: service(`${HOME}/pricing`, "pricing.js", "pricing", "node", 8080, ["express"]),
+      setup: [`cd ${HOME}/pricing`, "docker build -t quest/pricing:1.0 .", `cd ${HOME}`, 60, "docker run -d --name pricing -p 8080:8080 --cpus 0.1 --memory 512m quest/pricing:1.0", 30],
+      won: (e) => serves(e, 8080, "pricing:") && runningOf(e, "quest/pricing").some((c) => c.cpus >= 0.8),
+      check: (e) => { const c = runningOf(e, "quest/pricing")[0]; return { label: "curl localhost:8080", text: `${answer(e, 8080)}${c ? ` · limit ${c.cpus ? c.cpus + " CPU" : "none"}` : ""}` }; },
+      hints: [
+        "curl localhost:8080 times out, yet docker logs pricing is clean. Look at docker stats --no-stream: what is the CPU column stuck at?",
+        "About 10% is the limit, not the load: --cpus 0.1 (docker inspect pricing --format '{{.HostConfig.NanoCpus}}' says 100000000). docker exec pricing cat /sys/fs/cgroup/cpu.stat shows nr_throttled climbing. More memory or --cpu-shares cannot lift a hard quota.",
+        "Raise the quota in place, no restart needed: docker update --cpus 1 pricing"
+      ],
+      lesson: "A CPU limit does not crash anything; it makes the app slow. Watch CPU % pinned at the limit and nr_throttled, then size --cpus from measured use.",
+      tries: ["curl localhost:8080", "docker stats --no-stream", "docker exec pricing cat /sys/fs/cgroup/cpu.stat"]
+    },
+    {
+      id: "pids", title: "Out of processes", level: "12",
+      story: "A bug in the image resizer starts a convert process per image and never reaps them. Overnight it used up every PID on the host, and the web container can no longer start its workers.",
+      goal: "Contain the resizer with a PID limit, and get web answering on localhost:8080 again.",
+      done: "The resizer is contained, and web is back.",
+      files: service(`${HOME}/resizer`, "resizer.js", "resizer", "node", 8080, ["sharp"]),
+      setup: ["docker pull nginx:1.27", `cd ${HOME}/resizer`, "docker build -t quest/resizer:1.0 .", `cd ${HOME}`, "docker run -d --name web -p 8080:80 nginx:1.27", "docker run -d --name resizer quest/resizer:1.0",
+        (e) => { e.container("resizer").pids = e.pidsFree() + 11 - 20; e.container("resizer").logs.push("resizer: spawn failed: Error: spawn convert EAGAIN"); }, 480, "docker restart web", 2],
+      won: (e) => serves(e, 8080, "Welcome to nginx") && runningOf(e, "quest/resizer").some((c) => c.pidsLimit > 0 && c.pidsLimit <= 4096 && c.pids <= c.pidsLimit),
+      check: (e) => { const c = byImage(e, "quest/resizer")[0]; return { label: "host PIDs free", text: `${Math.max(0, e.pidsFree())}${c ? ` · resizer ${c.pids} (${c.pidsLimit ? "limit " + c.pidsLimit : "no limit"})` : ""}` }; },
+      hints: [
+        "curl localhost:8080 hangs. docker logs web: fork() failed (11: Resource temporarily unavailable). Then docker stats --no-stream and read the PIDS column.",
+        "resizer holds about 32,000 processes; the kernel allows 32,768 in all. docker update --pids-limit lowers the cap but does not kill processes already running.",
+        "Re-create the resizer with a cap, then restart web: docker rm -f resizer && docker run -d --name resizer --pids-limit 200 quest/resizer:1.0 && docker restart web"
+      ],
+      lesson: "One container can exhaust the host's process table. Give every container a --pids-limit, so a leak or a fork bomb stays inside it.",
+      tries: ["curl localhost:8080", "docker logs web", "docker stats --no-stream"]
+    },
+    {
+      id: "cicache", title: "CI rebuilds everything", level: "04",
+      story: "On the CI runner the shop build takes minutes on every push: npm ci runs every time, though package.json rarely changes. Locally it is cached. The runner is already logged in to ghcr.io.",
+      goal: "Make the next pipeline run reuse the npm ci layer from the run before.",
+      done: "CI reuses the dependency layer.",
+      ciRunner: true,
+      files: shopFiles(ORDERED_SHOP, NODE_IGNORE, true),
+      setup: [(e) => { e.logins.add("ghcr.io"); }, `cd ${HOME}/shop`],
+      won: (e) => Boolean(e.lastBuild && e.lastBuild.user && lastNpm(e) && lastNpm(e).cached),
+      check: (e) => ({ label: "npm ci on the last run", text: !e.lastBuild ? "not built yet" : lastNpm(e) && lastNpm(e).cached ? "CACHED" : "ran again" }),
+      hints: [
+        "Run docker build -t quest/shop:ci . twice. Even with nothing changed, every step runs again: each CI job starts on a fresh runner with an empty build cache.",
+        "Keep the cache outside the runner, in the registry: --cache-to exports it and --cache-from imports it. The default docker driver cannot export a cache; a docker-container builder can.",
+        "docker buildx create --name ci --driver docker-container --use, then docker buildx build --cache-from type=registry,ref=ghcr.io/kitchen/shop:buildcache --cache-to type=registry,ref=ghcr.io/kitchen/shop:buildcache,mode=max -t quest/shop:ci . Run it twice."
+      ],
+      lesson: "CI runners forget their build cache. Export it with --cache-to (registry, or type=gha on GitHub) and import it with --cache-from; mode=max keeps the intermediate layers too.",
+      tries: ["docker build -t quest/shop:ci .", "docker buildx ls", "cat Dockerfile"]
+    },
+    {
+      id: "cves", title: "Scan gate fails", level: "15",
+      story: "The pipeline's scan gate (docker scout cves --exit-code --only-severity critical,high) blocks quest/shop: two critical and four high findings, all in packages the app never uses.",
+      goal: "Build quest/shop with no CRITICAL or HIGH findings, still working.",
+      done: "quest/shop passes the scan gate.",
+      edit: ["Dockerfile"], editDir: `${HOME}/shop`, focus: "quest/shop",
+      files: shopFiles(ORDERED_SHOP.replace("node:22-alpine", "node:22"), NODE_IGNORE, true),
+      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", 120],
+      won: (e) => { const img = newestShop(e); return Boolean(img && !gate(e, img).length && e.trial(img).ok); },
+      check: (e) => { const img = newestShop(e) || e.image("quest/shop:1.0"); const g = gate(e, img); return { label: `${e.tagsOf(img)[0]} scan`, text: g.length ? `${g.filter((v) => v[1] === "CRITICAL").length} critical, ${g.filter((v) => v[1] === "HIGH").length} high` : "no critical or high" }; },
+      hints: [
+        "docker scout cves quest/shop:1.0, then docker scout quickview quest/shop:1.0: every finding comes from the base image, node:22.",
+        "node:22 is a full Debian with compilers, git, curl and imagemagick. apt-get upgrade fixes some, but several have no fix yet. Filtering the scan only hides them.",
+        "Change FROM to node:22-slim (or node:22-alpine) in the Dockerfile, then docker build -t quest/shop:1.1 . and scan it again."
+      ],
+      lesson: "Most vulnerabilities live in packages your app never uses. A smaller base removes them for good; rebuild regularly so fixes arrive, and gate CI on critical and high.",
+      tries: ["docker scout cves quest/shop:1.0", "docker scout quickview quest/shop:1.0", "cat Dockerfile"]
+    },
+    {
+      id: "dockersock", title: "Docker socket in a container", level: "15",
+      story: "A security review flagged the status dashboard: it mounts /var/run/docker.sock. It only needs to list containers.",
+      goal: "Keep the dashboard listing containers on localhost:8080, without giving it control of Docker.",
+      done: "The dashboard reads through a proxy that allows only reads.",
+      files: { ...service(`${HOME}/dashboard`, "dashboard.js", "dashboard", "root", 8080, ["express"]), ...service(`${HOME}/socket-proxy`, "proxy.js", "proxy", "root", 2375, ["express"]) },
+      setup: ["docker pull alpine:3.20",
+        (e) => { for (const d of ["dashboard"]) e.writeFile(`${HOME}/${d}/Dockerfile`, e.host[`${HOME}/${d}/Dockerfile`].text.replace("WORKDIR /app", "RUN apk add --no-cache docker-cli\nWORKDIR /app")); },
+        `cd ${HOME}/dashboard`, "docker build -t quest/dashboard:1.0 .", `cd ${HOME}/socket-proxy`, "docker build -t quest/socket-proxy:1.0 .", `cd ${HOME}`, 60,
+        "docker run -d --name dashboard -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock quest/dashboard:1.0", 30],
+      won: (e) => { const d = runningOf(e, "quest/dashboard").find((c) => c.proc.via === "proxy" && !c.mounts.some((m) => m.source === "/var/run/docker.sock")); return Boolean(d && serves(e, 8080, "containers running:") && e.containers.every((c) => c.proc.app !== "proxy" || ![...c.env].includes("POST=1"))); },
+      check: (e) => { const d = runningOf(e, "quest/dashboard")[0]; return { label: "dashboard access to Docker", text: !d ? "not running" : d.mounts.some((m) => m.source === "/var/run/docker.sock") ? "full control (socket mounted)" : d.proc.via === "proxy" ? "read-only, through the proxy" : "none" }; },
+      hints: [
+        "See what the mount allows: docker exec dashboard docker run --rm -v /:/host alpine:3.20 cat /host/etc/shadow. Whoever controls the dashboard can start any container, and so owns the host.",
+        "Mounting the socket :ro changes nothing: read-only applies to the file, not to the API calls sent through it. Put a gatekeeper in between: quest/socket-proxy allows reads when CONTAINERS=1 and blocks writes unless POST=1.",
+        "docker network create dash && docker run -d --name socket-proxy --network dash -e CONTAINERS=1 -v /var/run/docker.sock:/var/run/docker.sock quest/socket-proxy:1.0 && docker rm -f dashboard && docker run -d --name dashboard --network dash -p 8080:8080 -e DOCKER_HOST=tcp://socket-proxy:2375 quest/dashboard:1.0"
+      ],
+      lesson: "Access to the Docker socket is root on the host, read-only mount or not. Give tools that only read a socket proxy that allows exactly the API calls they need.",
+      tries: ["docker inspect dashboard --format '{{json .Mounts}}'", "docker exec dashboard docker ps", "curl localhost:8080"]
+    },
+    {
+      id: "x509", title: "x509: unknown authority", level: "14",
+      story: "Images moved to registry.kitchen.internal, which uses a certificate from the company's own CA. Pulls fail on this server. The CA certificate is in /home/dev/kitchen-ca.crt.",
+      goal: "Run registry.kitchen.internal/shop:2.1 on localhost:3000, with TLS still verified.",
+      done: "Docker trusts the company CA, and the shop runs.",
+      files: { ...shopFiles(DEV_DOCKERFILE, NODE_IGNORE, false), [`${HOME}/kitchen-ca.crt`]: file("-----BEGIN CERTIFICATE-----\n(practice CA certificate for registry.kitchen.internal; not a real one)\n-----END CERTIFICATE-----\n") },
+      setup: [`cd ${HOME}/shop`, "docker build -t registry.kitchen.internal/shop:2.1 .", (e) => e.publish("registry.kitchen.internal/shop:2.1", false, true), forget(`${HOME}/shop`), `cd ${HOME}`, 30,
+        "docker run -d --name shop -p 3000:3000 registry.kitchen.internal/shop:2.1", 1],
+      won: (e) => serves(e, 3000, "shop: ok") && !(e.daemon.conf["insecure-registries"] || []).length,
+      check: (e) => ({ label: "registry.kitchen.internal", text: (e.daemon.conf["insecure-registries"] || []).length ? "TLS verification turned off" : e.trusts("registry.kitchen.internal") ? "CA trusted" : "certificate not trusted" }),
+      hints: [
+        "docker pull registry.kitchen.internal/shop:2.1: x509: certificate signed by unknown authority. The registry is fine; this machine does not know the CA that signed its certificate.",
+        "insecure-registries in daemon.json would turn verification off for that registry, which is the opposite of the goal. Docker reads extra CAs per registry from /etc/docker/certs.d/<registry>/ca.crt.",
+        "sudo mkdir -p /etc/docker/certs.d/registry.kitchen.internal && sudo cp kitchen-ca.crt /etc/docker/certs.d/registry.kitchen.internal/ca.crt && docker run -d --name shop2 -p 3000:3000 registry.kitchen.internal/shop:2.1"
+      ],
+      lesson: "x509: unknown authority means trust, not a broken registry. Add the CA (certs.d for Docker, or the system store and restart), and keep TLS verification on.",
+      tries: ["docker pull registry.kitchen.internal/shop:2.1", "ls -la /etc/docker", "cat kitchen-ca.crt"]
+    }
+  );
   SCENARIOS.push(...MORE);
   // Easiest first: one container, then networks, storage, builds, registries, Compose, production, security.
   const GROUPS = [
     ["Basics", ["exits", "port", "typo", "conflict", "socket", "args"]],
     ["Networking", ["dns", "localhost", "isolated", "loopback", "portinuse", "hostgateway"]],
     ["Storage", ["volmask", "datalost", "perms"]],
-    ["Images and builds", ["cache", "bigimage", "copymissing", "exit127", "noexec", "platform"]],
-    ["Registries and upgrades", ["stale", "auth", "ratelimit", "pgupgrade"]],
+    ["Images and builds", ["cache", "cicache", "bigimage", "copymissing", "exit127", "noexec", "platform"]],
+    ["Registries and upgrades", ["stale", "auth", "x509", "ratelimit", "pgupgrade"]],
     ["Compose", ["composedns", "composeenv", "composeorder"]],
-    ["Running in production", ["restartloop", "healthcheck", "sigterm", "oom", "nologs", "logs", "diskfull", "daemon"]],
-    ["Security", ["exposed", "readonly", "capdrop", "secretlayer"]]
+    ["Running in production", ["restartloop", "healthcheck", "sigterm", "oom", "cpu", "pids", "nologs", "logs", "diskfull", "daemon"]],
+    ["Security", ["exposed", "dockersock", "cves", "readonly", "capdrop", "secretlayer"]]
   ];
   const ORDER = GROUPS.flatMap(([, ids]) => ids);
   SCENARIOS.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
@@ -3491,6 +3791,7 @@ ${healthcheck ? `    healthcheck:
     "  docker images | pull | tag | rmi | history | build [-t] [-f] [--no-cache] | system df | system prune | image prune | builder prune",
     "  docker volume ls|create|inspect|rm      docker network ls|create|inspect|rm|connect|disconnect",
     "  docker compose up|down|ps|logs|restart|exec|config      docker login|logout      docker rename",
+    "  docker buildx create|use|ls|build [--cache-from] [--cache-to]      docker scout cves|quickview (practice findings)",
     "  on your machine: curl, ls, cat, cd, pwd, echo, printf, export, touch, mkdir, rm, du -sh, df -h, chown, chmod, id, sed -i, grep,",
     "  systemctl and journalctl (docker), usermod, newgrp, ufw, iptables -L, ss -ltn (and sudo)",
     "  && and ; chain commands; | pipes into grep, head, tail, sort or wc -l; > and >> write files.",

@@ -23,7 +23,9 @@ const WORDS = ["docker", "run", "create", "start", "stop", "restart", "kill", "r
   "compose", "up", "down", "-v", "config", "restart", "exec", "db", "pg_isready", "login", "logout", "ghcr.io", "--password-stdin", "-u", "$GHCR_TOKEN", "systemctl", "start", "status",
   "journalctl", "usermod", "-aG", "newgrp", "ufw", "deny", "5432", "iptables", "-L", "DOCKER", "export", "A=1", "$A", "--add-host=host.docker.internal:host-gateway", "--health-cmd",
   "--no-healthcheck", "--log-driver", "none", "local", "--log-opt", "max-size=1m", "--platform", "linux/arm64", "--secret", "id=npmrc,src=.npmrc", "--cap-drop", "ALL", "--cap-add",
-  "CHOWN", "--read-only", "--tmpfs", "/var/run", "--pull", "always", "rename", "postgres:16", "postgres:17", "--env-file", ".env", "df", "-h", "truncate", "ss", "-ltn", "/d"];
+  "CHOWN", "--read-only", "--tmpfs", "/var/run", "--pull", "always", "rename", "postgres:16", "postgres:17", "--env-file", ".env", "df", "-h", "truncate", "ss", "-ltn", "/d",
+  "scout", "cves", "quickview", "--only-severity", "critical,high", "--exit-code", "buildx", "use", "ci", "--driver", "docker-container", "--use", "--cache-from", "--cache-to",
+  "type=registry,ref=ghcr.io/kitchen/shop:buildcache", "--load", "--cpus", "0.1", "--pids-limit", "200", "--cpu-shares", "cpu.stat", "/sys/fs/cgroup/cpu.stat", "update-ca-certificates", "cp", "kitchen-ca.crt"];
 const LINES = ["FROM node:22-alpine AS deps", "FROM deps", "FROM scratch", "FROM", "WORKDIR /app", "WORKDIR", "COPY . .", "COPY package*.json ./", "COPY --from=deps /app/node_modules ./node_modules",
   "COPY --from=nope /x /y", "COPY --chown=app:app . .", "COPY --chown=node . .", "COPY", "ADD https://example.com/x.tgz /tmp/", "RUN npm ci", "RUN npm ci --omit=dev", "RUN npm prune --omit=dev",
   "RUN apk add --no-cache curl", "RUN apt-get update && apt-get install -y curl", "RUN addgroup -S app && adduser -S -G app app", "RUN chown -R app:app /app", "RUN rm -rf /app/*",

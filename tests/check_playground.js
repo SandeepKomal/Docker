@@ -748,6 +748,117 @@ assert.match(run(e, "docker logs shop"), /SIGTERM received/);
 fixed(e, "sigterm: the app handles SIGTERM");
 assert.match(run(e, "docker run -d --name ng nginx:1.27 && docker stop ng && docker ps -a"), /Exited \(0\).*\bng$/m);
 
+// CPU throttling: a hard quota makes the app slow, not broken.
+e = fresh("cpu");
+assert.match(run(e, "curl localhost:8080"), /curl: \(28\) Operation timed out/);
+assert.match(run(e, "docker stats --no-stream"), /pricing\s+9\.97%/);
+assert.strictEqual(run(e, "docker inspect pricing --format '{{.HostConfig.NanoCpus}}'"), "100000000");
+assert.match(run(e, "docker exec pricing cat /sys/fs/cgroup/cpu.stat"), /nr_throttled 35874/);
+run(e, "docker restart pricing");
+broken(e, "a restart keeps the quota");
+run(e, "docker update --memory 1g --memory-swap 1g --cpu-shares 2048 pricing");
+broken(e, "memory and CPU shares cannot lift a hard quota");
+run(e, "docker update --cpus 0 pricing");
+assert.match(run(e, "curl localhost:8080"), /pricing:/);
+broken(e, "removing the limit is not the goal");
+run(e, "docker update --cpus 1 pricing");
+fixed(e, "cpu: a quota the load fits in");
+assert.match(run(e, "docker exec pricing cat /sys/fs/cgroup/cpu.stat"), /nr_throttled 0/);
+
+// PIDs: one container exhausts the host's process table.
+e = fresh("pids");
+assert.match(run(e, "docker logs web"), /fork\(\) failed while spawning "worker process" \(11: Resource temporarily unavailable\)/);
+assert.match(run(e, "docker stats --no-stream"), /resizer\s+.*\s3\d{4}$/m);
+run(e, "docker restart web");
+broken(e, "web cannot start workers while the host is out of PIDs");
+run(e, "docker update --pids-limit 200 resizer && docker restart web");
+broken(e, "a lower limit does not kill the processes already running");
+e = fresh("pids");
+run(e, "docker restart resizer && docker restart web");
+broken(e, "restarting the resizer frees PIDs only until it leaks again");
+e = fresh("pids");
+run(e, "docker rm -f resizer && docker run -d --name resizer --pids-limit 200 quest/resizer:1.0 && docker restart web");
+fixed(e, "pids: the resizer is capped and web is back");
+for (let i = 0; i < 5; i++) run(e, "docker ps");
+assert.match(run(e, "docker logs resizer"), /spawn convert EAGAIN/);
+assert.strictEqual(run(e, "docker exec resizer cat /sys/fs/cgroup/pids.max"), "200");
+fixed(e, "pids: the cap holds as it leaks");
+
+// CI build cache: a fresh runner has an empty cache every time.
+e = fresh("cicache");
+run(e, "docker build -t quest/shop:ci .");
+assert.match(run(e, "docker build -t quest/shop:ci ."), / => \[4\/5\] RUN npm ci/);
+broken(e, "every job on a fresh runner starts without a cache");
+assert.match(run(e, "docker build --cache-to type=registry,ref=ghcr.io/kitchen/shop:buildcache -t quest/shop:ci ."), /Cache export is not supported for the docker driver/);
+assert.match(run(e, "docker buildx create --name ci --driver docker-container --use"), /^ci$/);
+assert.match(run(e, "docker buildx ls"), /ci\*\s+docker-container/);
+assert.match(run(e, "docker buildx build --cache-from type=registry,ref=ghcr.io/kitchen/shop:buildcache -t quest/shop:ci ."), /ERROR importing cache manifest[\s\S]*No output specified with docker-container driver/);
+broken(e, "importing a cache nobody exported finds nothing");
+const CI = "docker buildx build --cache-from type=registry,ref=ghcr.io/kitchen/shop:buildcache --cache-to type=registry,ref=ghcr.io/kitchen/shop:buildcache,mode=max -t quest/shop:ci .";
+assert.match(run(e, CI), /exporting cache to registry/);
+broken(e, "the first run fills the cache");
+assert.match(run(e, CI), /importing cache manifest from ghcr\.io\/kitchen\/shop:buildcache[\s\S]*CACHED \[4\/5\] RUN npm ci/);
+fixed(e, "cicache: the second run reuses npm ci");
+run(e, "docker buildx build --no-cache --cache-from type=registry,ref=ghcr.io/kitchen/shop:buildcache -t quest/shop:ci .");
+broken(e, "--no-cache ignores the imported cache");
+assert.match(run(e, "docker buildx use nope"), /no builder "nope" found/);
+
+// Scan gate: the findings live in the base image.
+e = fresh("cves");
+assert.match(run(e, "docker scout cves quest/shop:1.0"), /Detected 7 vulnerable packages[\s\S]*not real CVEs[\s\S]*CRITICAL QUEST-2026-0101/);
+assert.match(run(e, "docker scout cves --only-severity medium quest/shop:1.0"), /MEDIUM QUEST-2026-0120/);
+broken(e, "filtering the report changes nothing in the image");
+e.writeFile("/home/dev/shop/Dockerfile", e.host["/home/dev/shop/Dockerfile"].text.replace("WORKDIR /app", "RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*\nWORKDIR /app"));
+run(e, "docker build -t quest/shop:1.1 .");
+assert.match(run(e, "docker scout cves --only-severity critical,high quest/shop:1.1"), /HIGH QUEST-2026-0111[\s\S]*HIGH QUEST-2026-0112/);
+assert.doesNotMatch(run(e, "docker scout cves quest/shop:1.1"), /✗ CRITICAL/);
+broken(e, "an upgrade fixes some, but two highs have no fix");
+run(e, "sed -i 's/FROM node:22$/FROM node:22-slim/' Dockerfile && docker build -t quest/shop:1.2 .");
+assert.match(run(e, "docker scout cves --exit-code --only-severity critical,high quest/shop:1.2"), /No vulnerable package detected/);
+fixed(e, "cves: a slim base");
+e = fresh("cves");
+run(e, "sed -i 's/FROM node:22$/FROM node:22-alpine/' Dockerfile && docker build -t quest/shop:1.1 .");
+fixed(e, "cves: or alpine");
+
+// The Docker socket in a container is root on the host.
+e = fresh("dockersock");
+assert.match(run(e, "docker exec dashboard docker run --rm -v /:/host alpine:3.20 cat /host/etc/shadow"), /^root:\*:/m);
+run(e, "docker rm -f dashboard && docker run -d --name dashboard -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock:ro quest/dashboard:1.0");
+assert.match(run(e, "docker exec dashboard docker run --rm -v /:/host alpine:3.20 cat /host/etc/shadow"), /^root:/m);
+broken(e, "a read-only mount of the socket still allows every API call");
+run(e, "docker rm -f dashboard && docker run -d --name dashboard -p 8080:8080 quest/dashboard:1.0");
+assert.match(run(e, "curl localhost:8080"), /cannot reach Docker/);
+broken(e, "without access the dashboard shows nothing");
+const PROXY = "docker network create dash && docker run -d --name socket-proxy --network dash -e CONTAINERS=1 -v /var/run/docker.sock:/var/run/docker.sock quest/socket-proxy:1.0";
+const DASH = "docker rm -f dashboard && docker run -d --name dashboard --network dash -p 8080:8080 -e DOCKER_HOST=tcp://socket-proxy:2375 quest/dashboard:1.0";
+e = fresh("dockersock");
+run(e, PROXY.replace("-e CONTAINERS=1", "-e CONTAINERS=1 -e POST=1"));
+run(e, DASH);
+broken(e, "a proxy that allows writes is the socket again");
+e = fresh("dockersock");
+run(e, PROXY);
+run(e, DASH);
+fixed(e, "dockersock: reads through the proxy");
+assert.match(run(e, "docker exec dashboard docker ps"), /socket-proxy/);
+assert.match(run(e, "docker exec dashboard docker run --rm alpine:3.20 id"), /403 Forbidden/);
+
+// x509: a registry signed by a private CA.
+e = fresh("x509");
+assert.match(run(e, "docker pull registry.kitchen.internal/shop:2.1"), /x509: certificate signed by unknown authority/);
+assert.match(run(e, "mkdir -p /etc/docker/certs.d/registry.kitchen.internal"), /Permission denied/);
+e = fresh("x509");
+run(e, `echo '{ "insecure-registries": ["registry.kitchen.internal"] }' > /tmp/d.json && sudo cp /tmp/d.json /etc/docker/daemon.json && sudo systemctl restart docker && docker run -d --name shop2 -p 3000:3000 registry.kitchen.internal/shop:2.1`);
+assert.match(run(e, "curl localhost:3000"), /shop: ok/);
+broken(e, "turning verification off is not the fix");
+e = fresh("x509");
+run(e, "sudo mkdir -p /etc/docker/certs.d/registry.kitchen.internal && sudo cp kitchen-ca.crt /etc/docker/certs.d/registry.kitchen.internal/ca.crt && docker run -d --name shop2 -p 3000:3000 registry.kitchen.internal/shop:2.1");
+fixed(e, "x509: the CA in certs.d");
+e = fresh("x509");
+assert.match(run(e, "sudo cp kitchen-ca.crt /usr/local/share/ca-certificates/ && sudo update-ca-certificates"), /1 added/);
+assert.match(run(e, "docker pull registry.kitchen.internal/shop:2.1"), /unknown authority/);
+run(e, "sudo systemctl restart docker && docker run -d --name shop2 -p 3000:3000 registry.kitchen.internal/shop:2.1");
+fixed(e, "x509: or the system store, after restarting Docker");
+
 // Real error text for common slips.
 e = fresh("exits");
 assert.match(run(e, "docker run ngnix"), /Unable to find image 'ngnix:latest' locally\ndocker: Error response from daemon: pull access denied for ngnix, repository does not exist/);

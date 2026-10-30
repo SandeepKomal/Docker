@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
-  <meta name="description" content="Docker errors and how to fix them: 48 problems, each with the exact error message, what it means, how to confirm it, the fix and how to prevent it.">
+  <meta name="description" content="Docker errors and how to fix them: 54 problems, each with the exact error message, what it means, how to confirm it, the fix and how to prevent it.">
   <meta property="og:type" content="article">
   <meta property="og:title" content="Docker problems and fixes">
   <meta property="og:description" content="Exact Docker error messages with causes, confirming commands, fixes and prevention.">
@@ -19,13 +19,15 @@
   <main class="wrap problems">
     <p class="eyebrow"><a href="index.html">Docker Quest</a></p>
     <h1>Docker problems and fixes</h1>
-    <p class="lede">48 problems people meet with Docker, each with the exact error, what it means, how to confirm it, the fix and how to prevent it. Practise each one in the <a href="index.html#pg-title">browser playground</a>.</p>
+    <p class="lede">54 problems people meet with Docker, each with the exact error, what it means, how to confirm it, the fix and how to prevent it. Practise each one in the <a href="index.html#pg-title">browser playground</a>.</p>
     <nav class="card problems-index" aria-label="Problems">
       <h2>Docker itself</h2>
       <ul>
         <li><a href="#daemon-down">Cannot connect to the Docker daemon</a></li>
         <li><a href="#socket-denied">permission denied on /var/run/docker.sock</a></li>
         <li><a href="#compose-v1">docker-compose: command not found</a></li>
+        <li><a href="#pids-exhausted">fork: Resource temporarily unavailable</a></li>
+        <li><a href="#cpu-throttled">Slow or timing out at a CPU limit</a></li>
       </ul>
       <h2>Container will not stay up</h2>
       <ul>
@@ -65,10 +67,16 @@
         <li><a href="#not-permitted">Operation not permitted (capabilities)</a></li>
         <li><a href="#data-lost">Data gone after re-creating a container</a></li>
       </ul>
+      <h2>Security findings</h2>
+      <ul>
+        <li><a href="#scan-gate">Image scan finds critical or high vulnerabilities</a></li>
+        <li><a href="#docker-sock-mounted">docker.sock mounted into a container</a></li>
+      </ul>
       <h2>Images and builds</h2>
       <ul>
         <li><a href="#image-size">The image is far bigger than the app</a></li>
         <li><a href="#cache-miss">Every build reinstalls dependencies</a></li>
+        <li><a href="#ci-cache">Cache export is not supported for the docker driver</a></li>
         <li><a href="#copy-not-found">COPY failed: not found</a></li>
         <li><a href="#unknown-instruction">dockerfile parse error: unknown instruction</a></li>
         <li><a href="#run-failed">did not complete successfully: exit code</a></li>
@@ -78,6 +86,7 @@
       <ul>
         <li><a href="#pull-denied">pull access denied, repository does not exist</a></li>
         <li><a href="#manifest-unknown">manifest unknown</a></li>
+        <li><a href="#x509-unknown-ca">x509: certificate signed by unknown authority</a></li>
         <li><a href="#unauthorized">unauthorized (private registry)</a></li>
         <li><a href="#rate-limit">toomanyrequests: pull rate limit</a></li>
         <li><a href="#stale-tag">Running an old version of :latest</a></li>
@@ -164,6 +173,55 @@ id</code></pre>
       <h4>Prevent it</h4>
       <p>Update scripts and CI to docker compose; v1 has been unsupported since 2023.</p>
       <p class="note">Practise it: <a href="index.html#play/composedns">Compose: wrong host</a>. Learn it: <a href="index.html#path">Level 10 · Compose</a>. <a href="index.html#fix/compose-v1">Open in Docker Quest</a>.</p>
+    </section>
+    <section class="card fix problem" id="pids-exhausted">
+      <h3>fork: Resource temporarily unavailable</h3>
+      <h4>The error</h4>
+      <pre class="fix-error"><code>fork() failed while spawning &quot;worker process&quot; (11: Resource temporarily unavailable)</code></pre>
+      <h4>What it means</h4>
+      <p>The host (or a container's cgroup) has no process IDs left, so programs cannot start processes or threads.</p>
+      <h4>Likely causes</h4>
+      <ul>
+        <li>A container leaking processes or threads with no --pids-limit</li>
+        <li>A fork bomb</li>
+        <li>A cgroup pids limit set too low for the app</li>
+      </ul>
+      <h4>Confirm</h4>
+      <pre><code>docker stats --no-stream   # PIDS column
+cat /proc/sys/kernel/pid_max
+docker exec &lt;name&gt; cat /sys/fs/cgroup/pids.max</code></pre>
+      <h4>Fix</h4>
+      <ol>
+        <li>docker rm -f &lt;leaking-container&gt;</li>
+        <li>docker run --pids-limit 200 ... to re-create it capped</li>
+        <li>docker restart &lt;affected-container&gt;</li>
+      </ol>
+      <h4>Prevent it</h4>
+      <p>Set --pids-limit (pids_limit in Compose) on every container, so one leak cannot take the host down.</p>
+      <p class="note">Practise it: <a href="index.html#play/pids">Out of processes</a>. Learn it: <a href="index.html#path">Level 12 · Limits and OOM</a>. <a href="index.html#fix/pids-exhausted">Open in Docker Quest</a>.</p>
+    </section>
+    <section class="card fix problem" id="cpu-throttled">
+      <h3>Slow or timing out at a CPU limit</h3>
+      <h4>The error</h4>
+      <pre class="fix-error"><code>curl: (28) Operation timed out after 5001 milliseconds with 0 bytes received</code></pre>
+      <h4>What it means</h4>
+      <p>The container hit its CPU quota and the kernel throttles it. Nothing crashes; everything is slow.</p>
+      <h4>Likely causes</h4>
+      <ul>
+        <li>--cpus (or a Compose cpus limit) set below the real load</li>
+        <li>A traffic peak beyond what the limit was sized for</li>
+      </ul>
+      <h4>Confirm</h4>
+      <pre><code>docker stats --no-stream   # CPU % pinned at the limit
+docker inspect &lt;name&gt; --format '{{.HostConfig.NanoCpus}}'
+docker exec &lt;name&gt; cat /sys/fs/cgroup/cpu.stat   # nr_throttled</code></pre>
+      <h4>Fix</h4>
+      <ol>
+        <li>docker update --cpus 1 &lt;name&gt;   # takes effect at once</li>
+      </ol>
+      <h4>Prevent it</h4>
+      <p>Size CPU limits from measured load with headroom, and alert on throttling, not only on errors.</p>
+      <p class="note">Practise it: <a href="index.html#play/cpu">Throttled CPU</a>. Learn it: <a href="index.html#path">Level 12 · Limits and OOM</a>. <a href="index.html#fix/cpu-throttled">Open in Docker Quest</a>.</p>
     </section>
     <h2 class="section-title">Container will not stay up</h2>
     <section class="card fix problem" id="exited-0">
@@ -760,6 +818,53 @@ docker image inspect &lt;image&gt; --format '{{json .Config.Volumes}}'</code></p
       <p>Always name volumes for data; back them up.</p>
       <p class="note">Practise it: <a href="index.html#play/datalost">Data gone after re-create</a>. Learn it: <a href="index.html#path">Level 08 · Volumes and bind mounts</a>. <a href="index.html#fix/data-lost">Open in Docker Quest</a>.</p>
     </section>
+    <h2 class="section-title">Security findings</h2>
+    <section class="card fix problem" id="scan-gate">
+      <h3>Image scan finds critical or high vulnerabilities</h3>
+      <h4>The error</h4>
+      <pre class="fix-error"><code>✗ Detected 7 vulnerable packages with a total of 7 vulnerabilities</code></pre>
+      <h4>What it means</h4>
+      <p>A scanner matched packages in the image against known vulnerabilities. Most come from the base image, often in packages the app never uses.</p>
+      <h4>Likely causes</h4>
+      <ul>
+        <li>A full base image (compilers, git, imagemagick)</li>
+        <li>A base that was not rebuilt after fixes were published</li>
+      </ul>
+      <h4>Confirm</h4>
+      <pre><code>docker scout cves &lt;image&gt;
+docker scout quickview &lt;image&gt;   # how much comes from the base</code></pre>
+      <h4>Fix</h4>
+      <ol>
+        <li>Move to a slim, alpine or distroless base</li>
+        <li>Rebuild to pick up fixed packages</li>
+        <li>Re-scan and gate on critical and high</li>
+      </ol>
+      <h4>Prevent it</h4>
+      <p>Scan in CI with an exit code, rebuild images on a schedule, and keep bases small.</p>
+      <p class="note">Practise it: <a href="index.html#play/cves">Scan gate fails</a>. Learn it: <a href="index.html#path">Level 15 · Container security</a>. <a href="index.html#fix/scan-gate">Open in Docker Quest</a>.</p>
+    </section>
+    <section class="card fix problem" id="docker-sock-mounted">
+      <h3>docker.sock mounted into a container</h3>
+      <h4>The error</h4>
+      <pre class="fix-error"><code>-v /var/run/docker.sock:/var/run/docker.sock</code></pre>
+      <h4>What it means</h4>
+      <p>Whatever runs in that container can use the full Docker API: start a privileged container, mount the host's root, and own the host. A :ro mount does not limit API calls.</p>
+      <h4>Likely causes</h4>
+      <ul>
+        <li>Dashboards, CI agents or log shippers given the socket for convenience</li>
+      </ul>
+      <h4>Confirm</h4>
+      <pre><code>docker inspect &lt;name&gt; --format '{{json .Mounts}}'
+docker ps --filter volume=/var/run/docker.sock</code></pre>
+      <h4>Fix</h4>
+      <ol>
+        <li>Give it a socket proxy that allows only the API calls it needs, over a network (DOCKER_HOST=tcp://socket-proxy:2375)</li>
+        <li>Remove the socket mount</li>
+      </ol>
+      <h4>Prevent it</h4>
+      <p>Treat socket access as root on the host: review it like any privileged access, and alert on new mounts of it.</p>
+      <p class="note">Practise it: <a href="index.html#play/dockersock">Docker socket in a container</a>. Learn it: <a href="index.html#path">Level 15 · Container security</a>. <a href="index.html#fix/docker-sock-mounted">Open in Docker Quest</a>.</p>
+    </section>
     <h2 class="section-title">Images and builds</h2>
     <section class="card fix problem" id="image-size">
       <h3>The image is far bigger than the app</h3>
@@ -809,6 +914,29 @@ docker history &lt;image&gt;</code></pre>
       <h4>Prevent it</h4>
       <p>Order instructions from least to most often changed; in CI, reuse cache with --cache-from.</p>
       <p class="note">Practise it: <a href="index.html#play/cache">Cache busted on every change</a>. Learn it: <a href="index.html#path">Level 04 · Layers and the build cache</a>. <a href="index.html#fix/cache-miss">Open in Docker Quest</a>.</p>
+    </section>
+    <section class="card fix problem" id="ci-cache">
+      <h3>Cache export is not supported for the docker driver</h3>
+      <h4>The error</h4>
+      <pre class="fix-error"><code>ERROR: Cache export is not supported for the docker driver.</code></pre>
+      <h4>What it means</h4>
+      <p>--cache-to needs a builder that can export cache, and CI runners start every job with an empty cache, so without one every step runs again.</p>
+      <h4>Likely causes</h4>
+      <ul>
+        <li>Building in CI with the default docker driver</li>
+        <li>No --cache-from, or a cache nobody exported yet</li>
+      </ul>
+      <h4>Confirm</h4>
+      <pre><code>docker buildx ls
+docker buildx build --progress=plain ...   # look for CACHED and importing cache manifest</code></pre>
+      <h4>Fix</h4>
+      <ol>
+        <li>docker buildx create --name ci --driver docker-container --use</li>
+        <li>docker buildx build --cache-from type=registry,ref=&lt;image&gt;:buildcache --cache-to type=registry,ref=&lt;image&gt;:buildcache,mode=max .</li>
+      </ol>
+      <h4>Prevent it</h4>
+      <p>Export and import the cache in every pipeline (registry, or type=gha on GitHub Actions).</p>
+      <p class="note">Practise it: <a href="index.html#play/cicache">CI rebuilds everything</a>. Learn it: <a href="index.html#path">Level 04 · Layers and the build cache</a>. <a href="index.html#fix/ci-cache">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="copy-not-found">
       <h3>COPY failed: not found</h3>
@@ -944,6 +1072,30 @@ docker search &lt;name&gt;</code></pre>
       <h4>Prevent it</h4>
       <p>Promote images by digest between environments.</p>
       <p class="note">Practise it: <a href="index.html#play/typo">pull access denied</a>. Learn it: <a href="index.html#path">Level 01 · Images and tags</a>. <a href="index.html#fix/manifest-unknown">Open in Docker Quest</a>.</p>
+    </section>
+    <section class="card fix problem" id="x509-unknown-ca">
+      <h3>x509: certificate signed by unknown authority</h3>
+      <h4>The error</h4>
+      <pre class="fix-error"><code>tls: failed to verify certificate: x509: certificate signed by unknown authority</code></pre>
+      <h4>What it means</h4>
+      <p>The registry's certificate was signed by a CA this machine does not trust, often a company's own CA or a TLS-inspecting proxy.</p>
+      <h4>Likely causes</h4>
+      <ul>
+        <li>An internal registry with a private CA</li>
+        <li>A corporate proxy that re-signs HTTPS traffic</li>
+      </ul>
+      <h4>Confirm</h4>
+      <pre><code>docker pull &lt;registry&gt;/&lt;image&gt;
+openssl s_client -connect &lt;registry&gt;:443 -showcerts &lt;/dev/null</code></pre>
+      <h4>Fix</h4>
+      <ol>
+        <li>sudo mkdir -p /etc/docker/certs.d/&lt;registry&gt;</li>
+        <li>sudo cp ca.crt /etc/docker/certs.d/&lt;registry&gt;/ca.crt</li>
+        <li>or add it to the system store (update-ca-certificates) and restart Docker</li>
+      </ol>
+      <h4>Prevent it</h4>
+      <p>Install the company CA with the machine image or configuration management. Never use insecure-registries to get past it.</p>
+      <p class="note">Practise it: <a href="index.html#play/x509">x509: unknown authority</a>. Learn it: <a href="index.html#path">Level 14 · Registries and platforms</a>. <a href="index.html#fix/x509-unknown-ca">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="unauthorized">
       <h3>unauthorized (private registry)</h3>
