@@ -726,6 +726,28 @@ run(e, "docker rm db && docker run -d --name db -e POSTGRES_PASSWORD=kitchen-pra
 fixed(e, "pgupgrade: back on the version that owns the data");
 assert.match(run(e, "docker-compose up -d"), /use docker compose \(with a space\)/);
 
+const SHOP_SRC = 'const express = require("express");\nconst app = express();\nconst server = app.listen(3000);\n';
+// docker stop waits 10 seconds: PID 1 ignores SIGTERM without a handler.
+e = fresh("sigterm");
+assert.match(run(e, "docker stop shop"), /^shop\n\(Docker waited 10s for shop to exit after SIGTERM, then sent SIGKILL\)$/);
+assert.match(run(e, "docker ps -a"), /Exited \(137\)/);
+broken(e, "the default stop ends in SIGKILL");
+run(e, "docker start shop && docker stop -t 1 shop");
+broken(e, "a shorter timeout only kills it sooner");
+run(e, "docker start shop && docker kill -s TERM shop");
+assert.match(run(e, "docker ps"), /Up .*shop/);
+run(e, "docker kill shop");
+broken(e, "SIGKILL is not a clean shutdown");
+run(e, "docker rm shop && docker run -d --init --name shop -p 3000:3000 quest/shop:1.0 && docker stop shop");
+assert.match(run(e, "docker ps -a"), /Exited \(143\)/);
+fixed(e, "sigterm: --init forwards the signal");
+e = fresh("sigterm");
+e.writeFile("/home/dev/shop/server.js", SHOP_SRC + 'process.on("SIGTERM", () => server.close(() => process.exit(0)));\n');
+run(e, "docker build -t quest/shop:1.1 . && docker rm -f shop && docker run -d --name shop -p 3000:3000 quest/shop:1.1 && docker stop shop");
+assert.match(run(e, "docker logs shop"), /SIGTERM received/);
+fixed(e, "sigterm: the app handles SIGTERM");
+assert.match(run(e, "docker run -d --name ng nginx:1.27 && docker stop ng && docker ps -a"), /Exited \(0\).*\bng$/m);
+
 // Real error text for common slips.
 e = fresh("exits");
 assert.match(run(e, "docker run ngnix"), /Unable to find image 'ngnix:latest' locally\ndocker: Error response from daemon: pull access denied for ngnix, repository does not exist/);

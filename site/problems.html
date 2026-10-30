@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
-  <meta name="description" content="Docker errors and how to fix them: 47 problems, each with the exact error message, what it means, how to confirm it, the fix and how to prevent it.">
+  <meta name="description" content="Docker errors and how to fix them: 48 problems, each with the exact error message, what it means, how to confirm it, the fix and how to prevent it.">
   <meta property="og:type" content="article">
   <meta property="og:title" content="Docker problems and fixes">
   <meta property="og:description" content="Exact Docker error messages with causes, confirming commands, fixes and prevention.">
@@ -19,7 +19,7 @@
   <main class="wrap problems">
     <p class="eyebrow"><a href="index.html">Docker Quest</a></p>
     <h1>Docker problems and fixes</h1>
-    <p class="lede">47 problems people meet with Docker, each with the exact error, what it means, how to confirm it, the fix and how to prevent it. Practise each one in the <a href="index.html#pg-title">browser playground</a>.</p>
+    <p class="lede">48 problems people meet with Docker, each with the exact error, what it means, how to confirm it, the fix and how to prevent it. Practise each one in the <a href="index.html#pg-title">browser playground</a>.</p>
     <nav class="card problems-index" aria-label="Problems">
       <h2>Docker itself</h2>
       <ul>
@@ -32,6 +32,7 @@
         <li><a href="#exited-0">Exited (0) right after it starts</a></li>
         <li><a href="#exited-1">Exited (1) or another non-zero code</a></li>
         <li><a href="#oom-137">Exited (137), OOMKilled true</a></li>
+        <li><a href="#stop-slow">docker stop takes 10 seconds, then Exited (137)</a></li>
         <li><a href="#exec-format">exec format error</a></li>
         <li><a href="#not-found-127">executable file not found in $PATH</a></li>
         <li><a href="#permission-126">exec: permission denied (entrypoint script)</a></li>
@@ -239,6 +240,32 @@ sudo dmesg | grep -i oom</code></pre>
       <h4>Prevent it</h4>
       <p>Size limits from measured use under load (docker stats), with headroom, and alert on restarts.</p>
       <p class="note">Practise it: <a href="index.html#play/oom">OOMKilled</a>. Learn it: <a href="index.html#path">Level 12 · Limits and OOM</a>. <a href="index.html#fix/oom-137">Open in Docker Quest</a>.</p>
+    </section>
+    <section class="card fix problem" id="stop-slow">
+      <h3>docker stop takes 10 seconds, then Exited (137)</h3>
+      <h4>The error</h4>
+      <pre class="fix-error"><code>Exited (137) 1 second ago   (after docker stop)</code></pre>
+      <h4>What it means</h4>
+      <p>The process ignored SIGTERM, so Docker waited for the grace period and sent SIGKILL. In-flight work is cut off.</p>
+      <h4>Likely causes</h4>
+      <ul>
+        <li>The app runs as PID 1 and has no SIGTERM handler; the kernel ignores the signal</li>
+        <li>Shell-form CMD: /bin/sh is PID 1 and may not pass the signal on</li>
+        <li>A wrapper script that runs the app without exec</li>
+      </ul>
+      <h4>Confirm</h4>
+      <pre><code>time docker stop &lt;name&gt;
+docker inspect &lt;name&gt; --format '{{.State.ExitCode}} {{.HostConfig.Init}}'
+docker inspect &lt;name&gt; --format '{{.Path}} {{.Args}}'</code></pre>
+      <h4>Fix</h4>
+      <ol>
+        <li>docker run --init ... (tini forwards SIGTERM)</li>
+        <li>or handle SIGTERM in the app and close cleanly</li>
+        <li>Use exec form, and exec in wrapper scripts</li>
+      </ol>
+      <h4>Prevent it</h4>
+      <p>Test shutdown in CI: docker stop must finish well inside its timeout with exit code 0 or 143.</p>
+      <p class="note">Practise it: <a href="index.html#play/sigterm">docker stop takes 10 seconds</a>. Learn it: <a href="index.html#path">Level 11 · Healthchecks and restarts</a>. <a href="index.html#fix/stop-slow">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="exec-format">
       <h3>exec format error</h3>

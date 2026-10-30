@@ -8,7 +8,7 @@ This repository is a practical companion for DevOps and cloud engineers who want
 
 The [Docker Quest site](https://sandeepkomal.github.io/Docker/) (source in [`site/`](./site/)) turns this repository into a hands-on course:
 
-- **Playground**: a `docker` CLI over a modelled engine with 39 real incidents, from a container that exits at once to OOM kills, Compose start order, registry limits and security hardening. Every scenario has its own link (`#play/<id>`).
+- **Playground**: a `docker` CLI over a modelled engine with 40 real incidents, from a container that exits at once to OOM kills, Compose start order, registry limits and security hardening. Every scenario has its own link (`#play/<id>`).
 - **Troubleshoot**: paste an error message and get what it means, how to confirm it, the fix and how to prevent it. Every problem has its own link (`#fix/<id>`), and all of them are on one plain page, [problems.html](https://sandeepkomal.github.io/Docker/problems.html).
 - **Dockerfile X-ray**, a **quiz** for each of the 17 levels, a **cheat sheet** whose commands run in the playground, and an **architecture** diagram.
 

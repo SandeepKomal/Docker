@@ -272,7 +272,8 @@
     start(x) {
       const host = x.env.HOST || "0.0.0.0";
       const debug = x.env.LOG_LEVEL === "debug" || x.args.includes("--verbose");
-      return x.module(mod || "express") || { logs: [...(debug ? [`${name}: debug logging on`] : []), `${name}: listening on ${host}:${port}`], loopback: /^(127\.0\.0\.1|localhost)$/.test(host), debug };
+      const handlesTerm = /SIGTERM/.test((x.view[x.script] || {}).text || "");
+      return x.module(mod || "express") || { logs: [...(debug ? [`${name}: debug logging on`] : []), `${name}: listening on ${host}:${port}`], loopback: /^(127\.0\.0\.1|localhost)$/.test(host), debug, handlesTerm };
     }
   });
   // A Node service that needs a database or queue before it can serve.
@@ -696,7 +697,7 @@
       c.logs.push(...r.logs);
       if (r.running) {
         c.state = "running";
-        c.proc = { app: r.app, listens: r.listens || [], hung: r.hung, via: r.via, loopback: r.loopback, readyAt: r.readyAt, debug: r.debug };
+        c.proc = { app: r.app, listens: r.listens || [], hung: r.hung, via: r.via, loopback: r.loopback, readyAt: r.readyAt, debug: r.debug, handlesTerm: r.handlesTerm };
         c.exitCode = 0;
         c.oom = false;
       } else this.exited(c, r.code, r.oom);
@@ -803,7 +804,7 @@
       view = view || this.view(c);
       const env = Object.fromEntries([...this.images[c.imageId].config.Env, ...c.env].map((kv) => [kv.split("=")[0], kv.slice(kv.indexOf("=") + 1)]));
       const x = {
-        e: this, c, view, uid: who.uid, gid: who.gid, env, caps: this.capsOf(c), args: args || [],
+        e: this, c, view, uid: who.uid, gid: who.gid, env, caps: this.capsOf(c), args: args || [], script,
         // A require() that fails like Node does when node_modules is missing.
         module: (mod) => (view[(script || "").replace(/\/[^/]*$/, "") + "/node_modules"] ? null : {
           code: 1, logs: nodeTrace(["node:internal/modules/cjs/loader:1228", "  throw err;", "  ^", "", `Error: Cannot find module '${mod}'`, "Require stack:", `- ${script}`,
@@ -812,13 +813,23 @@
       };
       const r = def.start(x);
       if (r.code !== undefined) return { code: r.code, oom: r.oom, logs: [...logs, ...r.logs] };
-      return { running: true, app: name, listens: def.port ? [def.port] : [], hung: r.hung, via: r.via, loopback: r.loopback, readyAt: r.readyAt, debug: r.debug, logs: [...logs, ...r.logs] };
+      return { running: true, app: name, listens: def.port ? [def.port] : [], hung: r.hung, via: r.via, loopback: r.loopback, readyAt: r.readyAt, debug: r.debug, handlesTerm: r.handlesTerm, logs: [...logs, ...r.logs] };
     }
-    stop(c, signal) {
-      if (!this.running(c) && c.state !== "restarting") return;
-      c.stopped = true;
+    // docker stop sends SIGTERM, then SIGKILL after the timeout. PID 1 ignores
+    // signals it has no handler for, so an app without one is killed (137).
+    // Returns the seconds Docker waited.
+    stop(c, signal, timeout) {
+      if (c.state === "restarting") { c.stopped = true; c.state = "exited"; return 0; }
+      if (!this.running(c)) return 0;
       const def = APPS[c.proc.app];
-      this.exited(c, signal === "KILL" ? 137 : def && def.stopCode !== undefined ? def.stopCode : c.proc.app ? 137 : 0, false);
+      const term = signal !== "KILL";
+      const code = !term ? 137 : c.init ? 143 : def && def.stopCode !== undefined ? def.stopCode : c.proc.handlesTerm ? 0 : 137;
+      if (term && code === 0 && c.proc.handlesTerm) c.logs.push(`${c.proc.app}: SIGTERM received, closing the server`);
+      const waited = term && code === 137 ? (timeout === undefined || Number.isNaN(timeout) ? 10 : timeout) : 0;
+      c.stopped = true;
+      this.exited(c, code, false);
+      c.lastStop = { signal: term ? "TERM" : "KILL", code, waited };
+      return waited;
     }
     // Would this image run? Used to check that a smaller image still works.
     trial(img) {
@@ -870,7 +881,7 @@
       env: o.env, tty: Boolean(o.tty), interactive: Boolean(o.interactive), rm: Boolean(o.rm), ports: o.ports, mounts: o.mounts,
       netMode: o.netMode || "bridge", nets, links: o.links || {}, memory: o.memory || 0, memorySwap: o.memorySwap || 0, restart: o.restart || "no",
       oomKillDisable: Boolean(o.oomKillDisable), privileged: Boolean(o.privileged), readOnly: Boolean(o.readOnly),
-      capDrop: o.capDrop || [], capAdd: o.capAdd || [], extraHosts: o.extraHosts || {}, health: o.health || null, log: o.log || { type: "json-file", opts: {} }, logBytes: 0, platform: o.platform || "",
+      capDrop: o.capDrop || [], capAdd: o.capAdd || [], extraHosts: o.extraHosts || {}, init: Boolean(o.init), health: o.health || null, log: o.log || { type: "json-file", opts: {} }, logBytes: 0, platform: o.platform || "",
       state: "created", exitCode: 0, oom: false, created: e.now, startedAt: 0, finishedAt: 0, logs: [], proc: { listens: [] }, hostname: id.slice(0, 12)
     };
   }
@@ -1068,7 +1079,7 @@
         Binds: c.mounts.filter((m) => m.spec).map((m) => m.spec), NetworkMode: c.netMode,
         PortBindings: Object.fromEntries(c.ports.map((p) => [`${p.cont}/tcp`, [{ HostIp: p.hostIp || "", HostPort: String(p.host) }]])),
         RestartPolicy: { Name: c.restart, MaximumRetryCount: 0 }, AutoRemove: c.rm, Privileged: c.privileged, ReadonlyRootfs: c.readOnly,
-        Memory: c.memory, MemorySwap: c.memorySwap, OomKillDisable: c.oomKillDisable,
+        Memory: c.memory, MemorySwap: c.memorySwap, OomKillDisable: c.oomKillDisable, Init: c.init || null,
         ExtraHosts: Object.keys(c.extraHosts || {}).length ? Object.entries(c.extraHosts).map(([n, ip]) => `${n}:${ip}`) : null, CapAdd: c.capAdd.length ? c.capAdd : null, CapDrop: c.capDrop.length ? c.capDrop : null, LogConfig: { Type: c.log.type, Config: c.log.opts }
       },
       Mounts: c.mounts.map((m) => ({ Type: m.type, ...(m.type === "volume" ? { Name: m.name } : {}), Source: m.type === "bind" ? m.source : m.type === "volume" ? `/var/lib/docker/volumes/${m.name}/_data` : "", Destination: m.dest, Driver: m.type === "volume" ? "local" : undefined, Mode: m.ro ? "ro" : "", RW: !m.ro, Propagation: m.type === "bind" ? "rprivate" : "" })),
@@ -1212,7 +1223,7 @@
       name, image: ref, imageId: img.id, cmd: cmd.length ? cmd : f.entrypoint !== undefined ? [] : img.config.Cmd, entrypoint: entry, workdir: f.workdir, user: f.user,
       env: (f.env || []).filter((x) => x.includes("=")), tty: f.tty, interactive: f.interactive, rm: f.rm, ports: ports.ports, mounts: m.mounts, netMode,
       aliases: f["network-alias"], links, memory, memorySwap, restart: f.restart, oomKillDisable: f["oom-kill-disable"], privileged: f.privileged, readOnly: f["read-only"],
-      capDrop: f["cap-drop"], capAdd: f["cap-add"], platform: f.platform,
+      capDrop: f["cap-drop"], capAdd: f["cap-add"], platform: f.platform, init: f.init,
       extraHosts: Object.fromEntries((f["add-host"] || []).map((h) => { const [n, ip] = h.split(/:(.*)/); return [n, ip === "host-gateway" ? "172.17.0.1" : ip]; })),
       health: f["no-healthcheck"] ? ["NONE"] : f["health-cmd"] ? ["CMD-SHELL", f["health-cmd"]] : null,
       log: { type: driver, opts: f["log-opt"] ? Object.fromEntries(f["log-opt"].map((kv) => [kv.split("=")[0], kv.slice(kv.indexOf("=") + 1)])) : !f["log-driver"] ? { ...(e.daemon.conf["log-opts"] || {}) } : {} }
@@ -2242,15 +2253,19 @@
           }
           if (sub === "kill") {
             if (c.state !== "running") return fail(`Error response from daemon: cannot kill container: ${n}: container ${c.id} is not running`);
-            e.stop(c, "KILL");
+            const sig = String(p.flags.signal || "KILL").toUpperCase().replace(/^SIG/, "");
+            // A TERM to a PID 1 with no handler is simply ignored.
+            if (sig === "TERM" && !c.init && !c.proc.handlesTerm && !(APPS[c.proc.app] && APPS[c.proc.app].stopCode !== undefined)) return ok(n);
+            e.stop(c, sig === "TERM" ? "TERM" : "KILL", 0);
             return ok(n);
           }
-          if (sub === "stop" || sub === "restart") e.stop(c);
-          if (sub === "stop") return ok(n);
+          const waited = sub === "stop" || sub === "restart" ? e.stop(c, null, p.flags.time !== undefined ? Number(p.flags.time) : undefined) : 0;
+          const note = waited ? [[`(Docker waited ${waited}s for ${n} to exit after SIGTERM, then sent SIGKILL)`, "dim"]] : [];
+          if (sub === "stop") return { code: 0, lines: [[n, ""], ...note] };
           if (c.state === "running") return ok(n);
           c.stopped = false;
           const err = e.start(c);
-          return err ? fail([`Error response from daemon: ${err}`, `Error: failed to start containers: ${n}`]) : ok(n);
+          return err ? fail([`Error response from daemon: ${err}`, `Error: failed to start containers: ${n}`]) : { code: 0, lines: [...note, [n, ""]] };
         });
       }
       case "port": {
@@ -3409,6 +3424,24 @@ ${healthcheck ? `    healthcheck:
       tries: ["docker logs api", "ss -ltn", "docker inspect api --format '{{.HostConfig.ExtraHosts}}'"]
     },
     {
+      id: "sigterm", title: "docker stop takes 10 seconds", level: "11",
+      story: "Every deploy, docker stop shop hangs for ten seconds, then the shop is killed. Customers in the middle of a checkout get errors.",
+      goal: "Make docker stop shut the shop down cleanly and at once.",
+      done: "The shop stops cleanly on SIGTERM.",
+      edit: ["server.js", "Dockerfile"], editDir: `${HOME}/shop`,
+      files: shopFiles(DEV_DOCKERFILE, NODE_IGNORE, false),
+      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", 120, "docker run -d --name shop -p 3000:3000 quest/shop:1.0", 600],
+      won: (e) => byImage(e, "quest/shop").some((c) => c.lastStop && c.lastStop.signal === "TERM" && (c.lastStop.code === 0 || c.lastStop.code === 143)),
+      check: (e) => { const c = byImage(e, "quest/shop").find((x) => x.lastStop) || byImage(e, "quest/shop")[0]; return { label: "docker stop", text: !c || !c.lastStop ? "not stopped yet" : `Exited (${c.lastStop.code})${c.lastStop.waited ? ` after ${c.lastStop.waited}s` : " at once"}` }; },
+      hints: [
+        "Run docker stop shop, then docker ps -a: Exited (137). 137 means SIGKILL, so the app never stopped on its own.",
+        "docker stop sends SIGTERM and waits 10 seconds. node runs as PID 1, and the kernel ignores signals that PID 1 has no handler for. A shorter -t only kills it sooner.",
+        "Give it an init process that forwards the signal: docker rm -f shop && docker run -d --init --name shop -p 3000:3000 quest/shop:1.0, then docker stop shop. Or handle SIGTERM in server.js and rebuild."
+      ],
+      lesson: "PID 1 is special: it ignores signals it does not handle. Run with --init (or tini in the image), handle SIGTERM in the app, and use exec form so the app gets the signal.",
+      tries: ["docker stop shop", "docker ps -a", "docker inspect shop --format '{{.HostConfig.Init}}'"]
+    },
+    {
       id: "pgupgrade", title: "Database files are incompatible", level: "14",
       story: "A routine update bumped the database image from postgres:16 to postgres:17. db now exits on every start.",
       goal: "Get db running again with all of its data.",
@@ -3435,7 +3468,7 @@ ${healthcheck ? `    healthcheck:
     ["Images and builds", ["cache", "bigimage", "copymissing", "exit127", "noexec", "platform"]],
     ["Registries and upgrades", ["stale", "auth", "ratelimit", "pgupgrade"]],
     ["Compose", ["composedns", "composeenv", "composeorder"]],
-    ["Running in production", ["restartloop", "healthcheck", "oom", "nologs", "logs", "diskfull", "daemon"]],
+    ["Running in production", ["restartloop", "healthcheck", "sigterm", "oom", "nologs", "logs", "diskfull", "daemon"]],
     ["Security", ["exposed", "readonly", "capdrop", "secretlayer"]]
   ];
   const ORDER = GROUPS.flatMap(([, ids]) => ids);
