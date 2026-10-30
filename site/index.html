@@ -4,7 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
-  <meta name="description" content="Learn Docker by fixing it: a browser playground with real incidents, a Dockerfile X-ray, quizzes, a troubleshooting reference and a cheat sheet.">
+  <meta name="description" content="Fix real Docker problems: exit codes, OOMKilled, port and DNS errors, volumes, permissions, image size, build cache, Compose, registries. A browser playground, a Dockerfile X-ray and a troubleshooting reference.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Docker Quest: fix real Docker problems">
+  <meta property="og:description" content="A free troubleshooting reference and browser playground for Docker errors and incidents, from Exited (0) to OOMKilled, ENOTFOUND and no space left on device.">
+  <meta property="og:url" content="https://sandeepkomal.github.io/Docker/">
+  <link rel="canonical" href="https://sandeepkomal.github.io/Docker/">
   <title>Docker Quest</title>
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="logo.svg" type="image/svg+xml">
@@ -33,22 +38,27 @@
   <main id="main" class="wrap">
     <section id="tab-path" class="tab">
       <div class="hero">
-        <div class="hero-text">
-          <img class="hero-logo" src="logo.svg" alt="" width="64" height="64">
-          <p class="eyebrow">Free and open source · MIT</p>
-          <h1>Build it small.<br>Run it safe.</h1>
-          <p class="sub">Images, layers, networks and volumes, learned by fixing real incidents in a Docker engine that runs in your browser. No install, no account.</p>
-          <div class="ctas">
-            <a class="pill primary" id="cta-start" href="#pg-title">Fix your first container</a>
-            <a class="pill" href="#xray">X-ray a Dockerfile</a>
-          </div>
+        <p class="eyebrow">Docker Quest</p>
+        <h1>Build it small.<br>Run it safe.</h1>
+        <p class="sub">Images, layers, networks and volumes, learned by fixing containers that misbehave. In your browser, with real docker commands and real errors.</p>
+        <div class="ctas">
+          <a class="pill primary" href="#path-title">Start the path</a>
+          <a class="more" href="#pg-title">Try a scenario</a>
         </div>
-        <figure class="motif" aria-labelledby="motif-cap">
-          <figcaption id="motif-cap">One image, before and after</figcaption>
-          <div id="motif"></div>
-          <button type="button" class="linkish" id="motif-try">Shrink it yourself in the playground</button>
-        </figure>
+        <div class="stage" id="stage" aria-labelledby="stage-title"></div>
+        <div class="stats" id="stats"></div>
       </div>
+
+      <section class="bento-block" aria-labelledby="bento-title">
+        <h2 class="section-title" id="bento-title">Everything you need, from the first command to the 3 a.m. incident.</h2>
+        <div class="bento">
+          <a class="tile wide" href="#pg-title"><div><p class="tile-k">Playground</p><h3>A real docker CLI, in your browser.</h3></div><p>Containers that exit, ports that do not answer, images that weigh 1.6 GB, stacks that start in the wrong order.</p></a>
+          <a class="tile wide" href="#xray"><div><p class="tile-k">Dockerfile X-ray</p><h3>Every line, explained.</h3></div><p>Paste a Dockerfile: what each line does, what is risky, what is missing.</p></a>
+          <a class="tile" href="#doctor"><div><p class="tile-k">Troubleshoot</p><h3>Paste the error, get the fix.</h3></div></a>
+          <a class="tile" href="#quiz"><div><p class="tile-k">Quiz</p><h3>Know why, not just how.</h3></div></a>
+          <a class="tile" href="#arch"><div><p class="tile-k">Architecture</p><h3>Client, daemon, containerd, runc.</h3></div></a>
+        </div>
+      </section>
 
       <section class="playground" aria-labelledby="pg-title">
         <div class="pg-head">
@@ -56,7 +66,7 @@
             <h2 id="pg-title" class="section-title">Fix a broken container. Right here.</h2>
             <p class="section-sub">Real incidents, real docker commands and real error messages.</p>
           </div>
-          <p id="pg-goal" class="pg-goal" aria-live="polite"></p>
+          <div class="pg-goal-row"><p id="pg-goal" class="pg-goal" aria-live="polite"></p><span id="pg-link"></span></div>
         </div>
         <div class="guide-slot" data-guide="playground"></div>
         <div class="pg-scenarios" id="pg-scenarios" role="group" aria-label="Scenario"></div>
@@ -112,7 +122,7 @@ docker builder prune</code></pre>
       <div class="guide-slot" data-guide="path"></div>
       <div class="stages" id="stages" role="list"></div>
       <div class="progress-row">
-        <div class="bar" role="progressbar" aria-label="Levels complete" aria-valuemin="0" aria-valuemax="14" id="bar"><span id="bar-fill"></span></div>
+        <div class="bar" role="progressbar" aria-label="Levels complete" aria-valuemin="0" aria-valuemax="17" id="bar"><span id="bar-fill"></span></div>
         <span id="bar-text"></span>
       </div>
       <div id="levels"></div>
@@ -166,10 +176,10 @@ docker builder prune</code></pre>
 
     <section id="tab-doctor" class="tab" hidden>
       <h2>Troubleshooting reference</h2>
-      <p class="lede">What does <code>docker ps -a</code> say, or what error do you see? Pick the symptom for what it means, the likely causes, the commands that confirm which one it is, and where to practise the fix.</p>
+      <p class="lede">Paste the error you see, or pick a symptom. Each answer gives the exact error, what it means, how to confirm it, the fix, how to prevent it, and a scenario to practise it. Every problem has its own link. There is also a <a href="problems.html">plain page of every problem</a>.</p>
       <div class="guide-slot" data-guide="doctor"></div>
-      <label class="field">Search symptoms and errors
-        <input id="doctor-q" type="search" placeholder="137, ENOTFOUND, permission, port..." autocomplete="off">
+      <label class="field">Search problems and error messages
+        <input id="doctor-q" type="search" placeholder="Paste an error, or type 137, ENOTFOUND, port..." autocomplete="off">
       </label>
       <div id="doctor-list" class="doctor-groups"></div>
       <div id="doctor-out"></div>

@@ -30,7 +30,7 @@ let total = 0;
 assert.deepStrictEqual(Object.keys(quiz).sort(), Q.levels.map((l) => l.id), "a quiz for every level and no other");
 for (const lv of Q.levels) {
   const items = quiz[lv.id];
-  assert.ok(items.length >= 3, `level ${lv.id} needs at least 3 quiz questions, has ${items.length}`);
+  assert.ok(items.length >= 4, `level ${lv.id} needs at least 4 quiz questions, has ${items.length}`);
   const seen = new Set();
   for (const item of items) {
     total++;
@@ -46,14 +46,17 @@ for (const lv of Q.levels) {
   }
 }
 
-const slug = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-assert.ok(Q.doctor.length >= 10, "at least 10 troubleshooting entries");
+// Every problem reads like a reference answer and has a stable link.
+assert.ok(Q.doctor.length >= 40, "at least 40 troubleshooting entries");
 for (const d of Q.doctor) {
-  assert.ok(d.meaning && d.causes.length && d.commands.length, `doctor "${d.status}": meaning, causes, commands`);
-  assert.ok(Q.levels.some((l) => l.id === d.level), `doctor "${d.status}" links to a missing level`);
+  assert.match(d.id, /^[a-z0-9-]+$/, `doctor "${d.status}": id for #fix/<id>`);
+  for (const k of ["status", "error", "meaning", "prevent"]) assert.ok(typeof d[k] === "string" && d[k].length > 3, `doctor ${d.id}: ${k}`);
+  for (const k of ["causes", "commands", "fix", "scenarios"]) assert.ok(Array.isArray(d[k]) && d[k].length, `doctor ${d.id}: ${k}`);
+  assert.ok(Q.levels.some((l) => l.id === d.level), `doctor ${d.id} links to a missing level`);
 }
-assert.strictEqual(new Set(Q.doctor.map((d) => slug(d.status))).size, Q.doctor.length, "doctor links must be unique");
-assert.deepStrictEqual(Q.doctorGroups.flatMap(([, s]) => s).sort(), Q.doctor.map((d) => d.status).sort(), "every troubleshooting entry belongs to exactly one group");
+assert.strictEqual(new Set(Q.doctor.map((d) => d.id)).size, Q.doctor.length, "doctor ids must be unique");
+assert.deepStrictEqual(Q.doctorGroups.flatMap(([, s]) => s).sort(), Q.doctor.map((d) => d.id).sort(), "every troubleshooting entry belongs to exactly one group");
+for (const lv of Q.levels) assert.ok(fs.existsSync(path.join(root, lv.docs)), `level ${lv.id}: ${lv.docs}`);
 
 for (const c of Q.architecture.components) {
   assert.ok(c.id && c.name && c.short && c.where && c.role && c.does.length && c.breaks && c.look.length, `architecture ${c.id}: complete`);
@@ -68,8 +71,20 @@ assert.strictEqual(new Set(Q.cheats.map((r) => r[0])).size, Q.cheats.length, "ch
 
 // The page: one script per file, the CSP, and no inline styles or handlers.
 const html = fs.readFileSync(path.join(root, "site/index.html"), "utf8");
+assert.match(html, /<meta name="description" content="[^"]{80,}">/);
+assert.match(html, /<meta property="og:title" content="[^"]+">[\s\S]*<meta property="og:description" content="[^"]+">/);
+assert.doesNotMatch(html, /og:image/, "no external images");
+assert.match(fs.readFileSync(path.join(root, "site/robots.txt"), "utf8"), new RegExp(`Sitemap: ${Q.site}sitemap\\.xml`));
+const sitemap = fs.readFileSync(path.join(root, "site/sitemap.xml"), "utf8");
+for (const u of [Q.site, Q.site + "problems.html"]) assert.ok(sitemap.includes(`<loc>${u}</loc>`), `sitemap lists ${u}`);
+
+// problems.html is generated from the data; it must be current and work without JavaScript.
+const problems = fs.readFileSync(path.join(root, "site/problems.html"), "utf8");
+assert.strictEqual(problems, require(path.join(root, "tools/build-problems.js")).build(), "site/problems.html is out of date: run node tools/build-problems.js");
+assert.doesNotMatch(problems, /<script/, "problems.html needs no JavaScript");
+for (const d of Q.doctor) assert.ok(problems.includes(`id="${d.id}"`), `problems.html has a section for ${d.id}`);
 assert.match(html, /<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">/);
-assert.doesNotMatch(html, /\sstyle=|\son[a-z]+=|<script>(?!<\/script>)|https?:\/\/(?!github\.com|codespaces)/i, "no inline styles, handlers, scripts or third-party loads");
+assert.doesNotMatch(html, /\sstyle=|\son[a-z]+=|<script>(?!<\/script>)|https?:\/\/(?!github\.com|sandeepkomal\.github\.io)/i, "no inline styles, handlers, scripts or third-party loads");
 for (const src of html.match(/src="[^"]+"/g)) assert.ok(fs.existsSync(path.join(root, "site", src.slice(5, -1))), `${src} exists`);
 assert.match(html, /© 2024–2026 Sandeep Komal Pothu and contributors\./);
 assert.match(html, /Docker® is a registered trademark of Docker, Inc\. This project is independent and not affiliated with Docker, Inc\./);

@@ -45,7 +45,19 @@
 
   const scenarioTitles = () => Object.fromEntries((window.DQPlayground ? window.DQPlayground.scenarios : []).map((x) => [x.id, x.title]));
   // Open a scenario in the playground, from anywhere on the site.
-  function practise(id) { location.hash = "path"; show(); window.DQPlayground.load(id); }
+  function practise(id) { location.hash = "play/" + id; }
+  // Copy a link to something on this page, for sharing or bookmarking.
+  function copyLink(hash, label) {
+    return h("button.copy", {
+      type: "button", title: "Copy a link to this " + label,
+      onclick: async (e) => {
+        const b = e.currentTarget;
+        const url = location.href.replace(/#.*$/, "") + "#" + hash;
+        try { await navigator.clipboard.writeText(url); b.textContent = "Link copied"; } catch { b.textContent = url; }
+        setTimeout(() => { b.textContent = "Copy link"; }, 1600);
+      }
+    }, "Copy link");
+  }
   const practiseRow = (ids, label) => {
     const titles = scenarioTitles();
     const known = (ids || []).filter((id) => titles[id]);
@@ -59,13 +71,15 @@
 
   // --- tabs ----------------------------------------------------------------
 
+  // Deep links: #fix/<id> opens a troubleshooting entry, #play/<id> a scenario.
   const tabs = ["path", "quiz", "xray", "doctor", "cheats", "arch"];
+  const ALIAS = { fix: "doctor", play: "path" };
   let current = null;
   function show() {
     const [want, sub] = location.hash.slice(1).split("/");
-    const tab = tabs.includes(want) ? want : "path";
-    if (tab === "doctor" && sub) {
-      const i = Q.doctor.findIndex((d) => slug(d.status) === sub);
+    const tab = tabs.includes(want) ? want : ALIAS[want] || "path";
+    if (want === "fix" && sub) {
+      const i = Q.doctor.findIndex((d) => d.id === sub);
       if (i >= 0) renderDoctor(i, true);
     }
     if (tab !== current) {
@@ -87,18 +101,41 @@
     if (current !== before) window.scrollTo(0, 0);
   });
 
-  // --- hero: one image, before and after -------------------------------------
+  // --- hero: the image-layers signature and the counts ----------------------
 
-  function renderMotif() {
-    const max = Math.max(...Q.motif.flatMap((img) => img.layers.map((l) => l[2])));
-    $("#motif").replaceChildren(...Q.motif.map((img) => h("div.motif-img", null,
-      h("p.motif-head", null, h("span", null, img.tag), h("strong", null, img.size)),
-      img.layers.map(([by, size, mb, why]) => {
-        const bar = h("span.motif-bar");
-        bar.style.width = `${Math.max(1, mb / max * 100)}%`;
-        return h("div.motif-row" + (why ? ".bad" : ""), null, h("span.motif-by", null, by), h("span.motif-size", null, size), bar, why ? h("span.motif-why", null, why) : null);
-      }))));
-    $("#motif-try").addEventListener("click", () => practise("bigimage"));
+  // Each bar is a layer, as wide as what it adds; the toggle applies the fix.
+  function renderStage() {
+    const list = h("div.layers");
+    const total = h("b");
+    const mb = (n) => (n < 1 ? "<1 MB" : n >= 1000 ? `${(n / 1000).toFixed(2)} GB` : `${Math.round(n)} MB`);
+    const draw = (rows) => {
+      const max = Q.signature.before[0][1];
+      list.replaceChildren(...rows.map(([by, size]) => {
+        const bar = h("i.bar");
+        bar.style.width = "0%";
+        requestAnimationFrame(() => { bar.style.width = `${Math.max(0.4, size / max * 100)}%`; });
+        return h("div.layer" + (size > 250 ? ".heavy" : ""), { title: `${by}: ${mb(size)}` }, h("span.layer-by", null, by), h("div", null, bar), h("span.size", null, mb(size)));
+      }));
+      const sum = rows.reduce((n, r) => n + r[1], 0);
+      total.textContent = mb(sum);
+      total.className = sum > 1000 ? "bad" : "good";
+    };
+    const toggle = h("button.toggle", { type: "button", "aria-pressed": "false" }, "Apply .dockerignore and a multi-stage build");
+    toggle.addEventListener("click", () => {
+      const on = toggle.getAttribute("aria-pressed") !== "true";
+      toggle.setAttribute("aria-pressed", String(on));
+      draw(on ? Q.signature.after : Q.signature.before);
+    });
+    $("#stage").replaceChildren(
+      h("div.stage-bar", null, h("div", null, h("strong", { id: "stage-title" }, "quest/shop"), h("div", null, "Each bar is a layer, as wide as what it adds.")), toggle),
+      list, h("div.total", null, h("span", null, "Image size"), total),
+      h("a.stage-try", { href: "#play/bigimage" }, "Shrink it yourself in the playground"));
+    draw(Q.signature.before);
+  }
+  function renderStats() {
+    const n = window.DQPlayground ? window.DQPlayground.scenarios.length : 0;
+    $("#stats").replaceChildren(...[[n, "incidents to fix"], [Q.levels.length, "levels, basics to production"], [Q.doctor.length, "errors explained"]]
+      .map(([v, label]) => h("div", null, h("b", null, String(v)), h("span", null, label))));
   }
 
   // --- path ----------------------------------------------------------------
@@ -301,45 +338,58 @@
 
   // --- troubleshooting reference ---------------------------------------------
 
-  const slug = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   function buildDoctorList() {
-    const index = new Map(Q.doctor.map((d, i) => [d.status, i]));
-    $("#doctor-list").replaceChildren(...Q.doctorGroups.map(([name, statuses]) => h("div.doctor-group", null,
-      h("div.doctor-group-name", null, name, h("span.doctor-group-count", null, String(statuses.length))),
-      h("div.doctor-group-items", null, statuses.map((s) => h("button.chip", {
-        type: "button", "data-index": index.get(s), "aria-pressed": "false", onclick: () => renderDoctor(index.get(s))
-      }, s))))));
+    const index = new Map(Q.doctor.map((d, i) => [d.id, i]));
+    $("#doctor-list").replaceChildren(...Q.doctorGroups.map(([name, ids]) => h("div.doctor-group", null,
+      h("div.doctor-group-name", null, name, h("span.doctor-group-count", null, String(ids.length))),
+      h("div.doctor-group-items", null, ids.map((id) => h("button.chip", {
+        type: "button", "data-index": index.get(id), "aria-pressed": "false", onclick: () => renderDoctor(index.get(id))
+      }, Q.doctor[index.get(id)].status))))));
+  }
+  // Pasted error text is long and full of IDs, paths and numbers: score entries by
+  // how many of its meaningful words they contain, instead of asking for all of them.
+  const STOP = new Set(["the", "a", "an", "to", "of", "and", "or", "in", "on", "at", "for", "is", "it", "by", "with", "from", "error", "response", "daemon", "docker", "unknown", "see", "help", "run", "more", "information"]);
+  const terms = (s) => s.toLowerCase().replace(/\b[0-9a-f]{12,}\b/g, " ").split(/[^a-z0-9_.$-]+/).map((t) => t.replace(/^[.-]+|[.-]+$/g, "")).filter((t) => t.length > 1 && !STOP.has(t));
+  const docText = Q.doctor.map((d) => terms([d.id, d.status, d.error, d.meaning, ...d.causes, ...d.commands, ...d.fix].join(" ")));
+  function doctorScores(q) {
+    const want = [...new Set(terms(q))];
+    return docText.map((words) => (want.length ? want.filter((w) => words.some((x) => x === w || (w.length > 3 && x.startsWith(w)))).length / want.length : 1));
   }
   function renderDoctorList() {
-    const words = $("#doctor-q").value.toLowerCase().split(/\s+/).filter(Boolean);
+    const q = $("#doctor-q").value;
+    const scores = doctorScores(q);
+    const long = terms(q).length > 2;
     let shown = 0;
     for (const group of document.querySelectorAll(".doctor-group")) {
       let inGroup = 0;
       for (const b of group.querySelectorAll("button")) {
-        const d = Q.doctor[b.dataset.index];
-        b.hidden = !words.every((w) => [d.status, d.meaning, ...d.causes, ...d.commands].join(" ").toLowerCase().includes(w));
+        b.hidden = scores[b.dataset.index] < (long ? 0.5 : 1);
         if (!b.hidden) inGroup++;
       }
       group.hidden = !inGroup;
       group.querySelector(".doctor-group-count").textContent = String(inGroup);
       shown += inGroup;
     }
+    // For pasted errors, the closest entries first.
+    const best = q.trim() ? scores.map((s, i) => [s, i]).filter(([s]) => s >= 0.5).sort((x, y) => y[0] - x[0]).slice(0, 3) : [];
+    $("#doctor-best").replaceChildren(...(best.length ? [h("span.muted.small", null, "Best match"), ...best.map(([, i]) => h("button.chip", { type: "button", onclick: () => renderDoctor(i) }, Q.doctor[i].status))] : []));
     $("#doctor-none").hidden = shown > 0;
   }
   function renderDoctor(index, fromHash) {
     const d = Q.doctor[index];
     document.querySelectorAll("#doctor-list button").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.index) === index)));
     const lv = Q.levels.find((l) => l.id === d.level);
-    // Each symptom has its own link, so it can be shared or bookmarked.
-    if (!fromHash) history.replaceState(null, "", "#doctor/" + slug(d.status));
-    $("#doctor-out").replaceChildren(h("div.card", null,
-      h("h3", null, d.status),
-      h("p", null, d.meaning),
-      h("h4", null, "Likely causes"),
-      h("ul", null, d.causes.map((c) => h("li", null, c))),
-      h("h4", null, "Confirm with"),
-      h("pre", null, h("code", null, d.commands.join("\n"))),
-      practiseRow(d.scenarios, "Try the fix in the playground:"),
+    // Each problem has its own link, so it can be shared or bookmarked.
+    if (!fromHash) history.replaceState(null, "", "#fix/" + d.id);
+    $("#doctor-out").replaceChildren(h("article.card.fix", { id: "fix-" + d.id },
+      h("div.fix-head", null, h("h3", null, d.status), copyLink("fix/" + d.id, "problem")),
+      h("h4", null, "The error"), h("pre.fix-error", null, h("code", null, d.error)),
+      h("h4", null, "What it means"), h("p", null, d.meaning),
+      h("h4", null, "Likely causes"), h("ul", null, d.causes.map((c) => h("li", null, c))),
+      h("h4", null, "Confirm"), h("pre", null, h("code", null, d.commands.join("\n"))),
+      h("h4", null, "Fix"), h("ol", null, d.fix.map((f) => h("li", null, /^(docker|sudo|echo|chmod|newgrp|cat|ls|df) /.test(f) ? h("code", null, f) : f))),
+      h("h4", null, "Prevent it"), h("p", null, d.prevent),
+      practiseRow(d.scenarios, "Practise it in the playground:"),
       h("p.note", null, "Learn it: ", h("a", { href: "#path", onclick: () => setTimeout(() => scrollToEl($("#" + stageId(lv.stage)))) }, `Level ${lv.id} · ${lv.title}`))));
     if (!fromHash) scrollToEl($("#doctor-out"));
   }
@@ -405,7 +455,7 @@
         const actions = h("div.cheat-actions", null,
           where && window.DQPlayground ? h("button.copy", {
             type: "button", title: where === "any" ? "Run it in the playground" : `Run it in the playground scenario "${titles[where]}"`,
-            onclick: () => { location.hash = "path"; show(); window.DQPlayground.prefill(full, where); }
+            onclick: () => { location.hash = where === "any" ? "path" : "play/" + where; show(); window.DQPlayground.prefill(full, where); }
           }, "Try") : h("a.copy.lab", { href: repoUrl("docker_installation.md"), title: "Needs Docker on your machine" }, "Lab"),
           copyButton(full));
         return h("li", null, h("div", null, code, h("span.muted", null, what)), actions);
@@ -465,11 +515,11 @@
     { label: "Docker architecture: every component explained", kind: "Section", run: () => goTab("arch") },
     ...Q.levels.map((lv) => ({ label: `${lv.id} · ${lv.title}`, hint: lv.topic, kind: "Level", run: () => goTab("path", () => scrollToEl(document.getElementById(stageId(lv.stage)))) })),
     ...Q.levels.map((lv) => ({ label: `Quiz: ${lv.id} · ${lv.topic}`, kind: "Quiz", run: () => goTab("quiz", () => { $("#quiz-level").value = lv.id; renderQuiz(); }) })),
-    ...Q.doctor.map((d, i) => ({ label: `Troubleshoot: ${d.status}`, kind: "Reference", run: () => goTab("doctor", () => renderDoctor(i)) }))
+    ...Q.doctor.map((d) => ({ label: `Troubleshoot: ${d.status}`, hint: d.error, kind: "Reference", run: () => { location.hash = "fix/" + d.id; } }))
   ];
   function renderPalette() {
     const words = paletteInput.value.toLowerCase().split(/\s+/).filter(Boolean);
-    const scenarios = (window.DQPlayground ? window.DQPlayground.scenarios : []).map((sc) => ({ label: `Playground: ${sc.title}`, kind: "Practice", run: () => goTab("path", () => window.DQPlayground.load(sc.id)) }));
+    const scenarios = (window.DQPlayground ? window.DQPlayground.scenarios : []).map((sc) => ({ label: `Playground: ${sc.title}`, kind: "Practice", run: () => practise(sc.id) }));
     paletteItems = [...ACTIONS, ...scenarios].filter((a) => words.every((w) => `${a.label} ${a.hint || ""} ${a.kind}`.toLowerCase().includes(w))).slice(0, 8);
     paletteActive = Math.min(paletteActive, Math.max(0, paletteItems.length - 1));
     paletteList.replaceChildren(...paletteItems.map((a, i) => h("li", {
@@ -533,17 +583,18 @@
   matchMedia("(max-width: 860px)").addEventListener("change", () => renderXray(xrayPick));
   buildDoctorList();
   $("#forget").addEventListener("click", forgetEverything);
-  $("#doctor-list").after(h("p.muted", { id: "doctor-none", hidden: true }, "No symptom matches. Try an exit code (137), an error word (denied, refused) or a thing (port, volume)."));
+  $("#doctor-list").before(h("div.doctor-practise", { id: "doctor-best", "aria-live": "polite" }));
+  $("#doctor-list").after(h("p.muted", { id: "doctor-none", hidden: true }, "No problem matches. Paste the error line itself, or try an exit code (137), a word (denied, refused) or a thing (port, volume)."));
   $("#doctor-q").addEventListener("input", renderDoctorList);
   $("#cheat-q").addEventListener("input", renderCheats);
   renderFill();
   $("#cheat-fill-box").open = matchMedia("(min-width: 721px)").matches || Object.keys(fills).length > 0;
 
   // Shared with architecture.js, which loads after this script.
-  window.DQUI = { h, rich, practiseRow };
+  window.DQUI = { h, rich, practiseRow, copyLink };
 
   renderGuides();
-  renderMotif();
+  renderStage();
   renderQuiz();
   renderXray(-1);
   show();
@@ -551,6 +602,9 @@
   window.addEventListener("DOMContentLoaded", () => {
     renderPath();
     renderCheats();
+    renderStats();
     if (current === "doctor") show();
+    if (location.hash.startsWith("#play/")) window.DQPlayground.open(location.hash.slice(6));
   });
+  window.addEventListener("hashchange", () => { if (location.hash.startsWith("#play/") && window.DQPlayground) window.DQPlayground.open(location.hash.slice(6)); });
 })();

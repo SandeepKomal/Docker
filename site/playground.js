@@ -69,12 +69,15 @@
   }
 
   // Split a command line like bash: quotes, &&, ||, ;, | and > redirects.
-  function lex(line) {
+  // With env, $NAME and ${NAME} expand outside single quotes.
+  function lex(line, env) {
     const out = [];
     let cur = "", q = null, has = false;
     const push = () => { if (cur || has) out.push({ w: cur }); cur = ""; has = false; };
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
+      const v = env && ch === "$" && q !== "'" ? /^\$(?:\{(\w+)\}|(\w+))/.exec(line.slice(i)) : null;
+      if (v) { cur += env[v[1] || v[2]] ?? ""; i += v[0].length - 1; continue; }
       if (q) {
         if (ch === q) q = null;
         else if (ch === "\\" && q === '"' && /["\\$`]/.test(line[i + 1] || "")) cur += line[++i];
@@ -128,7 +131,7 @@
   }
   function modeString(st) {
     const m = st.mode == null ? (st.dir ? 0o755 : 0o644) : st.mode;
-    let s = st.dir ? "d" : "-";
+    let s = st.dir ? "d" : st.socket ? "s" : "-";
     for (let shift = 6; shift >= 0; shift -= 3) {
       const b = (m >> shift) & 7;
       s += (b & 4 ? "r" : "-") + (b & 2 ? "w" : "-") + (b & 1 ? "x" : "-");
@@ -210,6 +213,8 @@
       ["ENV YARN_VERSION=1.22.22", 0], ["RUN /bin/sh -c set -ex && curl -fsSLO --compressed \"https://yarnpkg.com/downloads/$YARN_VERSION/yarn-v$YARN_VERSION.tar.gz\" # buildkit", 0.004],
       ["COPY docker-entrypoint.sh /usr/local/bin/ # buildkit", 0], ['ENTRYPOINT ["docker-entrypoint.sh"]', 0], ['CMD ["node"]', 0]]
   });
+  // The capabilities Docker gives a container unless told otherwise.
+  const DEFAULT_CAPS = ["AUDIT_WRITE", "CHOWN", "DAC_OVERRIDE", "FOWNER", "FSETID", "KILL", "MKNOD", "NET_BIND_SERVICE", "NET_RAW", "SETFCAP", "SETGID", "SETPCAP", "SETUID", "SYS_CHROOT"];
   const BASES = {
     "node:22": nodeImage(1.12 * GB, "debian", "# debian.sh --arch 'amd64' out/ 'bookworm' '@1729555200'"),
     "node:22-slim": nodeImage(240 * MB, "debian", "# debian.sh --arch 'amd64' out/ 'bookworm' '@1729555200' (slim)"),
@@ -223,16 +228,29 @@
     },
     "alpine:3.20": { size: 7.8 * MB, os: "alpine", bins: [], cmd: ["/bin/sh"], hist: [["ADD alpine-minirootfs-3.20.3-x86_64.tar.gz / # buildkit", null], ['CMD ["/bin/sh"]', 0]] },
     "ubuntu:24.04": { size: 78.1 * MB, os: "debian", bins: [], cmd: ["/bin/bash"], hist: [["ADD file:7486147a645d8835a5181c79f00a3606c6b714c83bcbfcd8862221eb14690f9e in / ", null], ['CMD ["/bin/bash"]', 0]] },
+    "postgres:17": {
+      size: 435 * MB, os: "debian", bins: ["postgres", "psql", "pg_isready"], users: { postgres: [999, 999] }, env: ["PG_MAJOR=17", "PGDATA=/var/lib/postgresql/data"], expose: [5432],
+      entrypoint: ["docker-entrypoint.sh"], cmd: ["postgres"], vol: ["/var/lib/postgresql/data"], stop: "SIGINT", fs: { "/var/lib/postgresql/data": D(999) },
+      hist: [["# debian.sh --arch 'amd64' out/ 'bookworm' '@1729555200'", 0.17], ["RUN /bin/sh -c set -eux; groupadd -r postgres --gid=999; useradd -r -g postgres --uid=999 postgres # buildkit", 0], ["ENV PG_MAJOR=17", 0],
+        ["RUN /bin/sh -c set -ex; apt-get update; apt-get install -y --no-install-recommends postgresql-common \"postgresql-$PG_MAJOR=$PG_VERSION\" # buildkit", null],
+        ['VOLUME [/var/lib/postgresql/data]', 0], ['ENTRYPOINT ["docker-entrypoint.sh"]', 0], ["STOPSIGNAL SIGINT", 0], ["EXPOSE map[5432/tcp:{}]", 0], ['CMD ["postgres"]', 0]]
+    },
+    "postgres:16": {
+      size: 432 * MB, os: "debian", bins: ["postgres", "psql", "pg_isready"], users: { postgres: [999, 999] }, env: ["PG_MAJOR=16", "PGDATA=/var/lib/postgresql/data"], expose: [5432],
+      entrypoint: ["docker-entrypoint.sh"], cmd: ["postgres"], vol: ["/var/lib/postgresql/data"], stop: "SIGINT", fs: { "/var/lib/postgresql/data": D(999) },
+      hist: [["# debian.sh --arch 'amd64' out/ 'bookworm' '@1729555200'", 0.17], ["ENV PG_MAJOR=16", 0], ["RUN /bin/sh -c set -ex; apt-get update; apt-get install -y --no-install-recommends postgresql-common \"postgresql-$PG_MAJOR=$PG_VERSION\" # buildkit", null],
+        ['VOLUME [/var/lib/postgresql/data]', 0], ['ENTRYPOINT ["docker-entrypoint.sh"]', 0], ["EXPOSE map[5432/tcp:{}]", 0], ['CMD ["postgres"]', 0]]
+    },
     "redis:7.4": {
       size: 117 * MB, os: "debian", bins: ["redis-server", "redis-cli"], users: { redis: [999, 999] }, expose: [6379], entrypoint: ["docker-entrypoint.sh"], cmd: ["redis-server"],
-      fs: { "/data": D(999) },
+      fs: { "/data": D(999) }, vol: ["/data"],
       hist: [["# debian.sh --arch 'amd64' out/ 'bookworm' '@1729555200'", 0.6], ["RUN /bin/sh -c set -eux; groupadd -r -g 999 redis; useradd -r -g redis -u 999 redis # buildkit", 0], ["ENV REDIS_VERSION=7.4.1", 0],
         ["RUN /bin/sh -c set -eux; apt-get update; apt-get install -y --no-install-recommends ca-certificates wget dpkg-dev gcc make # buildkit", null],
-        ['ENTRYPOINT ["docker-entrypoint.sh"]', 0], ["EXPOSE map[6379/tcp:{}]", 0], ['CMD ["redis-server"]', 0]]
+        ["VOLUME [/data]", 0], ['ENTRYPOINT ["docker-entrypoint.sh"]', 0], ["EXPOSE map[6379/tcp:{}]", 0], ['CMD ["redis-server"]', 0]]
     }
   };
   const ALIASES = {
-    "nginx:latest": "nginx:1.27", "node:latest": "node:22", "node:lts": "node:22", "node:22-bookworm": "node:22",
+    "nginx:latest": "nginx:1.27", "postgres:latest": "postgres:17", "node:latest": "node:22", "node:lts": "node:22", "node:22-bookworm": "node:22",
     "node:22-bookworm-slim": "node:22-slim", "alpine:latest": "alpine:3.20", "ubuntu:latest": "ubuntu:24.04", "redis:latest": "redis:7.4"
   };
   const normRef = (ref) => {
@@ -240,15 +258,89 @@
     if (!/:[^/]+$/.test(r) && !r.includes("@")) r += ":latest";
     return r;
   };
-  const fullRef = (ref) => `docker.io/${ref.includes("/") ? "" : "library/"}${ref}`;
+  const hostOf = (ref) => (/^[^/]+[.:][^/]*\//.test(ref) ? ref.split("/")[0] : "docker.io");
+  const fullRef = (ref) => (hostOf(ref) !== "docker.io" ? ref : `docker.io/${ref.includes("/") ? "" : "library/"}${ref}`);
+  const capName = (c) => String(c).toUpperCase().replace(/^CAP_/, "");
 
   // --- what programs do when they run ------------------------------------------
 
   const nodeTrace = (lines) => [...lines, "", "Node.js v22.11.0"];
+  const PAGE_403 = "<html>\n<head><title>403 Forbidden</title></head>\n<body>\n<center><h1>403 Forbidden</h1></center>\n<hr><center>nginx/1.27.3</center>\n</body>\n</html>";
+  // A small Express app that listens where HOST says, 0.0.0.0 by default.
+  const webApp = (name, port, mod) => ({
+    port, body: (e, c) => { const v = [...e.images[c.imageId].config.Env, ...c.env].reverse().find((kv) => kv.startsWith("APP_VERSION=")); return `${name}: ok${v ? ` (version ${v.split("=")[1]})` : ""}`; },
+    start(x) {
+      const host = x.env.HOST || "0.0.0.0";
+      const debug = x.env.LOG_LEVEL === "debug" || x.args.includes("--verbose");
+      return x.module(mod || "express") || { logs: [...(debug ? [`${name}: debug logging on`] : []), `${name}: listening on ${host}:${port}`], loopback: /^(127\.0\.0\.1|localhost)$/.test(host), debug };
+    }
+  });
+  // A Node service that needs a database or queue before it can serve.
+  const dbClient = (name, port, envName, fallback, dbPort, mod) => ({
+    port, body: `${name}: ok`,
+    start(x) {
+      const missing = x.module(mod);
+      if (missing) return missing;
+      const host = x.env[envName] || fallback;
+      const logs = [`${name}: connecting to ${host}:${dbPort}`];
+      const r = x.e.resolve(x.c, host);
+      if (!r) return { code: 1, logs: nodeTrace([...logs, `Error: getaddrinfo ENOTFOUND ${host}`, "    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:120:26) {", "  errno: -3008,", "  code: 'ENOTFOUND',", "  syscall: 'getaddrinfo',", `  hostname: '${host}'`, "}"]) };
+      const t = r.target;
+      if (!t || !t.proc.listens.includes(dbPort) || (t.proc.readyAt || 0) > x.e.now) return { code: 1, logs: nodeTrace([...logs, `Error: connect ECONNREFUSED ${r.ip}:${dbPort}`, "    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1615:16) {", "  errno: -111,", "  code: 'ECONNREFUSED',", "  syscall: 'connect',", `  address: '${r.ip}',`, `  port: ${dbPort}`, "}"]) };
+      return { logs: [...logs, `${name}: connected`, `${name}: listening on :${port}`], via: r.via };
+    }
+  });
+  const nginxBody = (e, c) => { const f = e.view(c)["/usr/share/nginx/html/index.html"]; return f && f.text !== undefined ? f.text.replace(/\n$/, "") : PAGE_403; };
   const APPS = {
-    nginx: { port: 80, stopCode: 0, body: NGINX_PAGE, start: (x) => ({ logs: [`${stamp(x.e.now)} [notice] 1#1: using the "epoll" event method`, `${stamp(x.e.now)} [notice] 1#1: nginx/1.27.3`, `${stamp(x.e.now)} [notice] 1#1: start worker processes`] }) },
+    nginx: {
+      port: 80, stopCode: 0, body: nginxBody,
+      start(x) {
+        const t = `${stamp(x.e.now)} [emerg] 1#1:`;
+        if (x.c.readOnly) {
+          for (const [dir, msg] of [["/var/cache/nginx", 'mkdir() "/var/cache/nginx/client_temp" failed (30: Read-only file system)'], ["/var/run", 'open() "/var/run/nginx.pid" failed (30: Read-only file system)']]) {
+            if (!x.c.mounts.some((m) => m.dest === dir)) return { code: 1, logs: [`${t} ${msg}`, `nginx: [emerg] ${msg}`] };
+          }
+        }
+        if (x.uid === 0 && !x.caps.has("CHOWN")) return { code: 1, logs: [`${t} chown("/var/cache/nginx/client_temp", 101) failed (1: Operation not permitted)`, 'nginx: [emerg] chown("/var/cache/nginx/client_temp", 101) failed (1: Operation not permitted)'] };
+        const logs = [`${stamp(x.e.now)} [notice] 1#1: using the "epoll" event method`, `${stamp(x.e.now)} [notice] 1#1: nginx/1.27.3`, `${stamp(x.e.now)} [notice] 1#1: start worker processes`];
+        const missing = ["SETGID", "SETUID"].find((cap) => x.uid === 0 && !x.caps.has(cap));
+        if (missing) return { hung: true, logs: [...logs, `${stamp(x.e.now)} [notice] 1#1: start worker process 29`, `${stamp(x.e.now)} [emerg] 29#29: ${missing.toLowerCase()}(101) failed (1: Operation not permitted)`, `${stamp(x.e.now)} [alert] 1#1: worker process 29 exited with fatal code 2 and cannot be respawned`] };
+        return { logs };
+      }
+    },
     redis: { port: 6379, stopCode: 0, start: () => ({ logs: ["1:M 30 Oct 2026 09:00:00.000 * Server initialized", "1:M 30 Oct 2026 09:00:00.000 * Ready to accept connections tcp"] }) },
-    shop: { port: 3000, body: "shop: ok", start: (x) => x.module("express") || { logs: ["shop: listening on :3000"] } },
+    postgres: {
+      port: 5432, stopCode: 0,
+      start(x) {
+        const major = (x.env.PG_MAJOR || "17");
+        const ver = x.view["/var/lib/postgresql/data/PG_VERSION"];
+        const ts = `${iso(x.e.now).slice(0, 19).replace("T", " ")}.000 UTC [1]`;
+        if (ver && ver.text.trim() !== major) {
+          return { code: 1, logs: ["", "PostgreSQL Database directory appears to contain a database; Skipping initialization", "", `${ts} FATAL:  database files are incompatible with server`, `${ts} DETAIL:  The data directory was initialized by PostgreSQL version ${ver.text.trim()}, which is not compatible with this version ${major === "17" ? "17.2" : "16.6"} (Debian ${major === "17" ? "17.2-1.pgdg120+1" : "16.6-1.pgdg120+1"}).`] };
+        }
+        if (ver) return { readyAt: x.e.now + 3000, logs: ["", "PostgreSQL Database directory appears to contain a database; Skipping initialization", "", `${ts} LOG:  database system is ready to accept connections`] };
+        // First start: initialise the data directory in its volume.
+        const m = x.c.mounts.find((mt) => mt.dest === "/var/lib/postgresql/data" && mt.type === "volume");
+        if (m && (x.env.POSTGRES_PASSWORD || x.env.POSTGRES_HOST_AUTH_METHOD === "trust")) x.e.volumes[m.name].fs["/PG_VERSION"] = { text: major + "\n", uid: 999 };
+        if (!x.env.POSTGRES_PASSWORD && x.env.POSTGRES_HOST_AUTH_METHOD !== "trust") {
+          return { code: 1, logs: ["Error: Database is uninitialized and superuser password is not specified.", "       You must specify POSTGRES_PASSWORD to a non-empty value for the", '       superuser. For example, "-e POSTGRES_PASSWORD=password" on "docker run".', "",
+            '       You may also use "POSTGRES_HOST_AUTH_METHOD=trust" to allow all', "       connections without a password. This is *not* recommended.", "", '       See PostgreSQL documentation about "trust":', "       https://www.postgresql.org/docs/current/auth-trust.html"] };
+        }
+        return { readyAt: x.e.now + 6000, logs: ["The files belonging to this database system will be owned by user \"postgres\".", "PostgreSQL init process complete; ready for start up.", "", `${iso(x.e.now).slice(0, 19).replace("T", " ")}.000 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432`, `${iso(x.e.now).slice(0, 19).replace("T", " ")}.000 UTC [1] LOG:  database system is ready to accept connections`] };
+      }
+    },
+    shop: webApp("shop", 3000),
+    payments: webApp("payments", 3000, "@kitchen/payments"),
+    orders: dbClient("orders", 8080, "DB_HOST", "db", 5432, "pg"),
+    worker: {
+      start(x) {
+        const missing = x.module("bullmq");
+        if (missing) return missing;
+        if (!x.env.QUEUE_URL) return { code: 1, logs: ["worker: starting", "worker: fatal: QUEUE_URL is not set (where to read jobs from)"] };
+        return { logs: ["worker: starting", `worker: reading jobs from ${x.env.QUEUE_URL}`] };
+      }
+    },
+    chatty: { port: 8080, body: "chatty: ok", start: (x) => x.module("express") || { logs: ["chatty: listening on :8080", ...[1, 2, 3].map((n) => `chatty: GET /api/items 200 ${n}ms request_id=${hexOf("r" + n).slice(0, 8)}`)] } },
     api: {
       port: 8080, body: "api: ok (redis: PONG)",
       start(x) {
@@ -317,12 +409,11 @@
     return { instrs: out };
   }
   // Exec form ["a", "b"] or shell form.
-  function argvOf(raw) {
-    if (raw.startsWith("[")) {
-      try { const a = JSON.parse(raw); if (Array.isArray(a)) return a.map(String); } catch { /* shell form after all */ }
-    }
-    return ["/bin/sh", "-c", raw];
+  function execForm(raw) {
+    if (!raw.startsWith("[")) return null;
+    try { const a = JSON.parse(raw); return Array.isArray(a) ? a.map(String) : null; } catch { return null; }
   }
+  const argvOf = (raw) => execForm(raw) || ["/bin/sh", "-c", raw];
   // Leading --flags of COPY, ADD and RUN.
   function instrFlags(raw) {
     const flags = {};
@@ -365,7 +456,17 @@
       this.cache = new Map();
       this.lastBuild = null;
       this.netCount = 0;
-      this.host = { "/home": D(), [HOME]: D(1000), "/srv": D(), "/tmp": D(0, 0o1777), "/etc": D() };
+      this.env = {};
+      this.remote = {};
+      this.logins = new Set();
+      this.hubLimit = Boolean(scenario.hubLimit);
+      this.capacity = 40 * GB;
+      this.hostServices = {};
+      this.daemon = { up: true, conf: {} };
+      this.groups = ["dev", "sudo", "docker"];
+      this.pendingGroups = [];
+      this.firewall = ["22/tcp                     ALLOW       Anywhere"];
+      this.host = { "/home": D(), [HOME]: D(1000), "/srv": D(), "/tmp": D(0, 0o1777), "/etc": D(), "/etc/docker": D(), "/var/run/docker.sock": { socket: true, uid: 0, gid: 998, mode: 0o660, size: 0 } };
       for (const [p, e] of Object.entries(scenario.files || {})) this.host[p] = { uid: 1000, gid: 1000, mode: e.dir ? 0o755 : 0o644, v: 0, ...e };
       this.addNetwork("bridge", "bridge", "172.17.0.0/16");
       this.addNetwork("host", "host");
@@ -374,6 +475,7 @@
       this.ready = false;
       for (const step of scenario.setup || []) {
         if (typeof step === "number") this.now += step * 60e3;
+        else if (typeof step === "function") step(this);
         else shell(this, step);
       }
       this.lastBuild = null;
@@ -408,10 +510,10 @@
         comment: /^# debian|^ADD file/.test(by) ? "debuerreotype 0.15" : "buildkit.dockerfile.v0"
       }));
       const img = {
-        id: hexOf(`image|${key}`), digest: hexOf(`digest|${key}`), created, layers, os: b.os,
+        id: hexOf(`image|${key}`), digest: hexOf(`digest|${key}`), created, layers, os: b.os, arch: "amd64",
         bins: new Set([...BINS[b.os], ...b.bins]), users: { root: [0, 0], ...(b.users || {}) },
         fs: { ...BASE_FS, ...(b.fs || {}) },
-        config: { Env: ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", ...(b.env || [])], Cmd: b.cmd, Entrypoint: b.entrypoint || null, WorkingDir: "", User: "", ExposedPorts: b.expose || [], StopSignal: b.stop || null }
+        config: { Env: ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", ...(b.env || [])], Cmd: b.cmd, Entrypoint: b.entrypoint || null, WorkingDir: "", User: "", ExposedPorts: b.expose || [], StopSignal: b.stop || null, Volumes: b.vol || [], Healthcheck: null }
       };
       this.bases[key] = img;
       return img;
@@ -436,21 +538,62 @@
     }
     pullLines(ref) {
       const r = normRef(ref);
-      const img = this.registry(r);
-      const [repo, tag] = r.split(":");
+      const host = hostOf(r);
+      const repo = r.slice(0, r.lastIndexOf(":"));
+      const tag = r.slice(r.lastIndexOf(":") + 1);
+      const path = host === "docker.io" ? (repo.includes("/") ? repo : "library/" + repo) : repo.slice(host.length + 1);
+      const remote = this.remote[r];
+      const img = remote ? remote.image : this.registry(r);
+      if (host === "docker.io" && this.hubLimit && !this.logins.has("docker.io") && !(img && this.tags[r] === img.id)) {
+        return { error: "toomanyrequests: You have reached your unauthenticated pull rate limit. https://www.docker.com/increase-rate-limit" };
+      }
+      if (remote && remote.private && !this.logins.has(host)) return { error: `Head "https://${host === "docker.io" ? "registry-1.docker.io" : host}/v2/${path}/manifests/${tag}": unauthorized` };
       if (!img) {
-        const known = Object.keys(BASES).some((k) => k.startsWith(repo + ":"));
-        return { error: known ? `manifest for ${r} not found: manifest unknown: manifest unknown`
+        const known = Object.keys(BASES).some((k) => k.startsWith(repo + ":")) || Object.keys(this.remote).some((k) => k.startsWith(repo + ":"));
+        return { error: known || host !== "docker.io" ? `manifest for ${r} not found: manifest unknown: manifest unknown`
           : `pull access denied for ${repo}, repository does not exist or may require 'docker login': denied: requested access to the resource is denied` };
       }
       const had = this.tags[r] === img.id;
-      const lines = [`${tag}: Pulling from ${repo.includes("/") ? repo : "library/" + repo}`];
+      const lines = [`${tag}: Pulling from ${path}`];
       if (!had) for (const l of img.layers.filter((x) => x.id)) lines.push(`${l.id.slice(0, 12)}: Pull complete`);
-      lines.push(`Digest: sha256:${img.digest}`, `Status: ${had ? "Image is up to date" : "Downloaded newer image"} for ${r}`, fullRef(r));
+      lines.push(`Digest: sha256:${img.digest || hexOf("digest" + img.id)}`, `Status: ${had ? "Image is up to date" : "Downloaded newer image"} for ${r}`, fullRef(r));
       this.tag(r, img);
       return { lines };
     }
 
+    // Setup helper: move a local image to a registry, as if it had been pushed there.
+    publish(ref, priv) {
+      const img = this.image(ref);
+      this.remote[normRef(ref)] = { image: img, private: Boolean(priv) };
+      delete this.tags[normRef(ref)];
+      if (!this.tagsOf(img).length) delete this.images[img.id];
+    }
+    // Bytes on the disk that holds /var/lib/docker: the OS, images, build cache, volumes and logs.
+    diskUsed() {
+      const d = diskUse(this);
+      return 7.5 * GB + d.imageSize + d.cacheSize + d.volumeSize + this.containers.reduce((n, c) => n + (c.logBytes || 0), 0);
+    }
+    capsOf(c) {
+      if (c.privileged) return new Set([...DEFAULT_CAPS, "SYS_ADMIN", "NET_ADMIN", "SYS_PTRACE"]);
+      const drop = c.capDrop.map(capName);
+      const caps = new Set(drop.includes("ALL") ? [] : DEFAULT_CAPS.filter((x) => !drop.includes(x)));
+      for (const a of c.capAdd.map(capName)) (a === "ALL" ? [...DEFAULT_CAPS, "SYS_ADMIN", "NET_ADMIN", "SYS_PTRACE"] : [a]).forEach((x) => caps.add(x));
+      return caps;
+    }
+    // Run a container's healthcheck now: null when it has none.
+    health(c) {
+      const test = c.health || this.images[c.imageId].config.Healthcheck;
+      if (!test || test[0] === "NONE" || c.state !== "running") return null;
+      const shellForm = test[0] === "CMD-SHELL";
+      const cmd = shellForm ? test[1] : test.slice(1).join(" ");
+      const first = words(cmd.split(/\|\||&&/)[0]);
+      const who = this.userOf(c);
+      // exit is a shell builtin, not a program in the image.
+      const r = !first.length ? { code: 0, lines: [] } : first[0] === "exit" ? { code: Number(first[1]) || 0, lines: [] } : ctool(this, c, first, who);
+      const out = r.oci ? (shellForm ? `/bin/sh: ${first[0]}: not found` : r.oci) : r.na ? "" : r.lines.map((l) => l[0]).join("\n");
+      const code = r.oci ? (shellForm && /\|\|\s*exit 1/.test(cmd) ? 1 : 127) : r.na ? 0 : r.code ? (/\|\|\s*exit 1/.test(cmd) ? 1 : r.code) : 0;
+      return { status: code === 0 ? "healthy" : "unhealthy", code, out };
+    }
     container(name) {
       if (!name) return null;
       const n = String(name).replace(/^\//, "");
@@ -485,10 +628,14 @@
 
     // Resolve a hostname from inside a container, as Docker's DNS and /etc/hosts would.
     resolve(c, name) {
+      if (name === "172.17.0.1") return { ip: name, via: "ip", target: { proc: { listens: Object.keys(this.hostServices).map(Number), app: "redis" } } };
       if (/^\d+\.\d+\.\d+\.\d+$/.test(name)) {
         const target = this.containers.find((o) => this.running(o) && Object.values(o.nets).some((n) => n.ip === name));
         return { ip: name, via: "ip", target };
       }
+      const onHost = { proc: { listens: Object.keys(this.hostServices).map(Number), app: "redis" } };
+      if (c.netMode === "host" && /^(localhost|127\.0\.0\.1)$/.test(name)) return { ip: "127.0.0.1", via: "host", target: onHost };
+      if (c.extraHosts && c.extraHosts[name]) return { ip: c.extraHosts[name], via: "hosts", target: c.extraHosts[name] === "172.17.0.1" ? onHost : null };
       if (name === "localhost" || name === c.hostname) return { ip: "127.0.0.1", via: "self", target: c };
       const link = c.links[name] && this.container(c.links[name]);
       if (link && this.running(link) && link.nets.bridge && link.nets.bridge.ip) return { ip: link.nets.bridge.ip, via: "link", target: link };
@@ -514,16 +661,18 @@
         if (target) cport = target.ports.find((p) => p.host === port).cont;
         else target = this.containers.find((o) => this.running(o) && o.netMode === "host" && o.proc.listens.includes(port));
         if (!target) return refused(host);
-        if (!target.proc.listens.includes(cport) && target.netMode !== "host") return { code: 56, text: "curl: (56) Recv failure: Connection reset by peer" };
+        if ((!target.proc.listens.includes(cport) || target.proc.loopback) && target.netMode !== "host") return { code: 56, text: "curl: (56) Recv failure: Connection reset by peer" };
       } else {
         const r = c ? this.resolve(c, host) : { target: this.containers.find((o) => this.running(o) && Object.values(o.nets).some((n) => n.ip === host)) };
         if (!r) return { code: 6, text: `curl: (6) Could not resolve host: ${host}` };
         target = r.target;
-        if (!target || !target.proc.listens.includes(port)) return refused(host);
+        if (!target || !target.proc.listens.includes(port) || (target.proc.loopback && target !== c)) return refused(host);
       }
       if (target.proc.hung) return { code: 28, text: "curl: (28) Operation timed out after 5001 milliseconds with 0 bytes received" };
       if (target.proc.app === "redis") return { code: 1, text: "curl: (1) Received HTTP/0.9 when not allowed" };
-      return { code: 0, text: APPS[target.proc.app].body, app: target.proc.app };
+      const body = APPS[target.proc.app].body;
+      if (!body) return { code: 52, text: "curl: (52) Empty reply from server" };
+      return { code: 0, text: typeof body === "function" ? body(this, target) : body, app: target.proc.app };
     }
 
     // Start a container's main process; returns an error message or null.
@@ -537,7 +686,7 @@
       }
       for (const m of c.mounts) if (m.type === "volume") this.populate(m, img);
       const argv = [...(c.entrypoint || []), ...(c.cmd || [])];
-      const r = this.process(c, argv, who);
+      const r = img.arch !== "amd64" ? { code: 255, logs: [`exec ${argv[0] === "docker-entrypoint.sh" ? "/usr/local/bin/docker-entrypoint.sh" : argv[0]}: exec format error`] } : this.process(c, argv, who);
       if (r.oci) { c.exitCode = 127; c.state = c.startedAt ? "exited" : "created"; return r.oci; }
       for (const [net, n] of Object.entries(c.nets)) {
         const nw = this.networks[net];
@@ -547,7 +696,7 @@
       c.logs.push(...r.logs);
       if (r.running) {
         c.state = "running";
-        c.proc = { app: r.app, listens: r.listens || [], hung: r.hung, via: r.via };
+        c.proc = { app: r.app, listens: r.listens || [], hung: r.hung, via: r.via, loopback: r.loopback, readyAt: r.readyAt, debug: r.debug };
         c.exitCode = 0;
         c.oom = false;
       } else this.exited(c, r.code, r.oom);
@@ -591,9 +740,26 @@
         const [bin, ...rest] = a;
         const base = bin.split("/").pop();
         if (base === "docker-entrypoint.sh") {
-          if (img.bins.has("nginx")) { if (/^nginx/.test(rest[0] || "")) logs.push(...NGINX_ENTRY); a = rest; continue; }
-          a = rest.length && !rest[0].startsWith("-") ? rest : [img.bins.has("redis-server") ? "redis-server" : "node", ...rest];
+          if (img.bins.has("nginx")) {
+            if (/^nginx/.test(rest[0] || "")) logs.push(...NGINX_ENTRY.slice(0, 3), ...(c.readOnly ? ["10-listen-on-ipv6-by-default.sh: info: can not modify /etc/nginx/conf.d/default.conf (read-only file system?)"] : []), NGINX_ENTRY[3]);
+            a = rest;
+            continue;
+          }
+          const program = img.bins.has("redis-server") ? "redis-server" : img.bins.has("postgres") ? "postgres" : "node";
+          a = rest.length && !rest[0].startsWith("-") && (img.bins.has(rest[0].split("/").pop()) || program !== "node") ? rest : [program, ...rest];
           continue;
+        }
+        // A script in the image: it must be executable, and its exec line names the program.
+        if (bin.startsWith("/") || bin.startsWith("./")) {
+          const view = this.view(c);
+          const f = view[join(c.workdir || img.config.WorkingDir || "/", bin)];
+          if (f && !f.dir && !img.bins.has(base)) {
+            if (!((f.mode == null ? 0o644 : f.mode) & 0o111)) return { oci: OCI(bin).replace("executable file not found in $PATH", "permission denied") };
+            const line = (f.text || "").split("\n").reverse().find((l) => /^\s*exec\s/.test(l));
+            a = line ? [...words(line.replace(/^\s*exec\s+/, "").replace(/"\$@"/, "")), ...rest] : [];
+            if (!a.length) return { code: 0, logs };
+            continue;
+          }
         }
         if (!img.bins.has(base)) return { oci: OCI(bin) };
         if (/^(sh|bash|ash)$/.test(base)) {
@@ -613,15 +779,18 @@
           return this.app("nginx", c, logs, who);
         }
         if (base === "redis-server") return this.app("redis", c, logs, who);
+        if (base === "postgres") return this.app("postgres", c, logs, who);
         if (base === "sleep") return { running: true, logs, app: null };
         if (base === "node") {
-          if (!rest.length || rest[0].startsWith("-")) return c.interactive ? { running: true, logs, app: null } : { code: 0, logs };
+          if (rest[0] && rest[0].startsWith("-") && !/^--(inspect|max-old-space-size|enable-source-maps|env-file)/.test(rest[0])) return { code: 9, logs: [...logs, `node: bad option: ${rest[0]}`] };
+          if (rest[0] && rest[0].startsWith("-")) { a = ["node", ...rest.slice(1)]; continue; }
+          if (!rest.length) return c.interactive ? { running: true, logs, app: null } : { code: 0, logs };
           const view = this.view(c);
           const script = join(c.workdir || img.config.WorkingDir || "/", rest[0]);
           const file = view[script] || view[script + ".js"];
           if (!file) return { code: 1, logs: nodeTrace([...logs, "node:internal/modules/cjs/loader:1228", "  throw err;", "  ^", "", `Error: Cannot find module '${script}'`, "    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)", "    at Module._load (node:internal/modules/cjs/loader:1051:27) {", "  code: 'MODULE_NOT_FOUND',", "  requireStack: []", "}"]) };
           if (!file.app) return { code: 0, logs };
-          return this.app(file.app, c, logs, who, view, script);
+          return this.app(file.app, c, logs, who, view, script, rest.slice(1));
         }
         const r = ctool(this, c, a, who);
         if (r.na) return { code: 0, logs };
@@ -629,12 +798,12 @@
       }
       return { code: 0, logs };
     }
-    app(name, c, logs, who, view, script) {
+    app(name, c, logs, who, view, script, args) {
       const def = APPS[name];
       view = view || this.view(c);
       const env = Object.fromEntries([...this.images[c.imageId].config.Env, ...c.env].map((kv) => [kv.split("=")[0], kv.slice(kv.indexOf("=") + 1)]));
       const x = {
-        e: this, c, view, uid: who.uid, gid: who.gid, env,
+        e: this, c, view, uid: who.uid, gid: who.gid, env, caps: this.capsOf(c), args: args || [],
         // A require() that fails like Node does when node_modules is missing.
         module: (mod) => (view[(script || "").replace(/\/[^/]*$/, "") + "/node_modules"] ? null : {
           code: 1, logs: nodeTrace(["node:internal/modules/cjs/loader:1228", "  throw err;", "  ^", "", `Error: Cannot find module '${mod}'`, "Require stack:", `- ${script}`,
@@ -643,7 +812,7 @@
       };
       const r = def.start(x);
       if (r.code !== undefined) return { code: r.code, oom: r.oom, logs: [...logs, ...r.logs] };
-      return { running: true, app: name, listens: [def.port], hung: r.hung, via: r.via, logs: [...logs, ...r.logs] };
+      return { running: true, app: name, listens: def.port ? [def.port] : [], hung: r.hung, via: r.via, loopback: r.loopback, readyAt: r.readyAt, debug: r.debug, logs: [...logs, ...r.logs] };
     }
     stop(c, signal) {
       if (!this.running(c) && c.state !== "restarting") return;
@@ -656,6 +825,7 @@
       const c = newContainer(this, { name: "trial", imageId: img.id, image: img.id, cmd: img.config.Cmd, entrypoint: img.config.Entrypoint, env: [], mounts: [], ports: [] });
       const who = this.userOf(c);
       if (who.error) return { ok: false, why: who.error };
+      if (img.arch !== "amd64") return { ok: false, why: "exec format error" };
       const r = this.process(c, [...(c.entrypoint || []), ...(c.cmd || [])], who);
       return { ok: Boolean(r.running && r.app), why: r.oci || r.logs.join("\n") };
     }
@@ -667,6 +837,30 @@
     }
   }
 
+  // The daemon stops its containers; on start it reads daemon.json and restarts those with a policy.
+  function daemonStop(e) {
+    for (const c of e.containers) if (c.state === "running" || c.state === "restarting") { e.stop(c); c.stopped = false; }
+    e.daemon.up = false;
+    e.daemon.since = e.now;
+  }
+  function daemonStart(e) {
+    const f = e.host["/etc/docker/daemon.json"];
+    e.daemon.since = e.now;
+    e.daemon.error = null;
+    if (f && f.text !== undefined && f.text.trim()) {
+      try { e.daemon.conf = JSON.parse(f.text); } catch (err) {
+        const trailing = /,\s*([}\]])/.exec(f.text);
+        const ch = trailing ? trailing[1] : (/position (\d+)/.exec(err.message) ? f.text[Number(/position (\d+)/.exec(err.message)[1])] : "");
+        e.daemon.error = `unable to configure the Docker daemon with file /etc/docker/daemon.json: ${trailing ? `invalid character '${ch}' looking for beginning of object key string` : ch ? `invalid character '${ch}' after object key:value pair` : "unexpected end of JSON input"}`;
+        e.daemon.up = false;
+        return e.daemon.error;
+      }
+    } else e.daemon.conf = {};
+    e.daemon.up = true;
+    for (const c of e.containers) if (c.state === "exited" && !c.stopped && (c.restart === "always" || c.restart === "unless-stopped")) e.start(c);
+    return null;
+  }
+
   function newContainer(e, o) {
     const id = e.id(o.name);
     const nets = {};
@@ -676,6 +870,7 @@
       env: o.env, tty: Boolean(o.tty), interactive: Boolean(o.interactive), rm: Boolean(o.rm), ports: o.ports, mounts: o.mounts,
       netMode: o.netMode || "bridge", nets, links: o.links || {}, memory: o.memory || 0, memorySwap: o.memorySwap || 0, restart: o.restart || "no",
       oomKillDisable: Boolean(o.oomKillDisable), privileged: Boolean(o.privileged), readOnly: Boolean(o.readOnly),
+      capDrop: o.capDrop || [], capAdd: o.capAdd || [], extraHosts: o.extraHosts || {}, health: o.health || null, log: o.log || { type: "json-file", opts: {} }, logBytes: 0, platform: o.platform || "",
       state: "created", exitCode: 0, oom: false, created: e.now, startedAt: 0, finishedAt: 0, logs: [], proc: { listens: [] }, hostname: id.slice(0, 12)
     };
   }
@@ -733,6 +928,12 @@
       case "cat": return catLines(view, wd, a, "cat");
       case "echo": return say(a.join(" "));
       case "true": case "sleep": return say("");
+      case "pg_isready": return c.proc.app === "postgres" && c.proc.readyAt <= e.now ? say("/var/run/postgresql:5432 - accepting connections") : { code: 2, lines: [["/var/run/postgresql:5432 - no response", "warn"]] };
+      case "redis-cli": {
+        if (a.includes("ping") || a.includes("PING")) return say("PONG");
+        const dump = view["/data/dump.rdb"];
+        return a.some((x) => /^dbsize$/i.test(x)) ? say(`(integer) ${dump ? dump.keys : 0}`) : say("(the playground's redis-cli answers ping and dbsize)", "na");
+      }
       case "false": return { code: 1, lines: [] };
       case "hostname": return say(c.hostname);
       case "whoami": return say(who.name || `whoami: unknown uid ${who.uid}`);
@@ -775,9 +976,10 @@
 
   // --- docker ------------------------------------------------------------------
 
-  const RUN_SPEC = flagSpec("d|detach i|interactive t|tty rm P|publish-all read-only privileged init oom-kill-disable help",
-    "name p|publish v|volume e|env net|network m|memory memory-swap u|user restart entrypoint w|workdir link mount cpus pids-limit tmpfs cap-drop cap-add security-opt network-alias h|hostname l|label platform",
-    "publish volume env link mount tmpfs cap-drop cap-add security-opt network-alias label");
+  const RUN_SPEC = flagSpec("d|detach i|interactive t|tty rm P|publish-all read-only privileged init oom-kill-disable no-healthcheck help",
+    "name p|publish v|volume e|env net|network m|memory memory-swap u|user restart entrypoint w|workdir link mount cpus pids-limit tmpfs cap-drop cap-add security-opt network-alias h|hostname l|label platform log-driver log-opt health-cmd health-interval env-file pull add-host",
+    "publish volume env link mount tmpfs cap-drop cap-add security-opt network-alias label log-opt add-host");
+  const LOG_DRIVERS = ["json-file", "local", "none", "syslog", "journald", "gelf", "fluentd", "awslogs", "splunk", "etwlogs", "gcplogs"];
   const fail = (lines, cls) => ({ code: 1, lines: (Array.isArray(lines) ? lines : [lines]).map((l) => [l, cls || "warn"]) });
   const ok = (lines, cls) => ({ code: 0, lines: (Array.isArray(lines) ? lines : [lines]).filter((l) => l !== null).map((l) => (Array.isArray(l) ? l : [l, cls || ""])) });
   const na = (text) => ({ code: 0, lines: [[text, "na"]] });
@@ -785,7 +987,7 @@
   const LAB = (what) => na(`${what} needs a real Docker host. Run it on your machine (Lab).`);
 
   function statusOf(e, c) {
-    if (c.state === "running") return `Up ${duration(e.now - c.startedAt)}`;
+    if (c.state === "running") { const hc = e.health(c); return `Up ${duration(e.now - c.startedAt)}${hc ? ` (${hc.status})` : ""}`; }
     if (c.state === "restarting") return `Restarting (${c.exitCode}) ${duration(e.now - c.finishedAt)} ago`;
     if (c.state === "exited") return `Exited (${c.exitCode}) ${duration(e.now - c.finishedAt)} ago`;
     return "Created";
@@ -858,13 +1060,16 @@
     return {
       Id: c.id, Created: iso(c.created), Path: argv[0] || "", Args: argv.slice(1),
       State: { Status: c.state, Running: c.state === "running", Paused: false, Restarting: c.state === "restarting", OOMKilled: c.oom, Dead: false,
+        ...(() => { const hc = e.health(c); return hc ? { Health: { Status: hc.status, FailingStreak: hc.code ? 3 : 0, Log: [{ ExitCode: hc.code, Output: hc.out }] } } : {}; })(),
         Pid: c.state === "running" ? 4000 + (hash(c.id) % 900) : 0, ExitCode: c.exitCode, Error: "", StartedAt: c.startedAt ? iso(c.startedAt) : "0001-01-01T00:00:00Z", FinishedAt: c.finishedAt ? iso(c.finishedAt) : "0001-01-01T00:00:00Z" },
-      Image: `sha256:${img.id}`, Name: `/${c.name}`, RestartCount: 0,
+      Image: `sha256:${img.id}`, Name: `/${c.name}`, RestartCount: 0, Platform: "linux",
+      LogPath: c.log.type === "json-file" ? `/var/lib/docker/containers/${c.id}/${c.id}-json.log` : "",
       HostConfig: {
         Binds: c.mounts.filter((m) => m.spec).map((m) => m.spec), NetworkMode: c.netMode,
         PortBindings: Object.fromEntries(c.ports.map((p) => [`${p.cont}/tcp`, [{ HostIp: p.hostIp || "", HostPort: String(p.host) }]])),
         RestartPolicy: { Name: c.restart, MaximumRetryCount: 0 }, AutoRemove: c.rm, Privileged: c.privileged, ReadonlyRootfs: c.readOnly,
-        Memory: c.memory, MemorySwap: c.memorySwap, OomKillDisable: c.oomKillDisable
+        Memory: c.memory, MemorySwap: c.memorySwap, OomKillDisable: c.oomKillDisable,
+        ExtraHosts: Object.keys(c.extraHosts || {}).length ? Object.entries(c.extraHosts).map(([n, ip]) => `${n}:${ip}`) : null, CapAdd: c.capAdd.length ? c.capAdd : null, CapDrop: c.capDrop.length ? c.capDrop : null, LogConfig: { Type: c.log.type, Config: c.log.opts }
       },
       Mounts: c.mounts.map((m) => ({ Type: m.type, ...(m.type === "volume" ? { Name: m.name } : {}), Source: m.type === "bind" ? m.source : m.type === "volume" ? `/var/lib/docker/volumes/${m.name}/_data` : "", Destination: m.dest, Driver: m.type === "volume" ? "local" : undefined, Mode: m.ro ? "ro" : "", RW: !m.ro, Propagation: m.type === "bind" ? "rprivate" : "" })),
       Config: { Hostname: c.hostname, User: c.user || img.config.User, Tty: c.tty, OpenStdin: c.interactive, Env: [...img.config.Env, ...c.env], Cmd: c.cmd, Image: c.image,
@@ -878,8 +1083,8 @@
   }
   function inspectImage(e, img) {
     return {
-      Id: `sha256:${img.id}`, RepoTags: e.tagsOf(img), RepoDigests: [], Created: iso(img.created), Os: "linux", Architecture: "amd64", Size: e.imageSize(img),
-      Config: { User: img.config.User, ExposedPorts: Object.fromEntries((img.config.ExposedPorts || []).map((p) => [`${p}/tcp`, {}])), Env: img.config.Env, Cmd: img.config.Cmd, WorkingDir: img.config.WorkingDir, Entrypoint: img.config.Entrypoint, Labels: null },
+      Id: `sha256:${img.id}`, RepoTags: e.tagsOf(img), RepoDigests: [], Created: iso(img.created), Os: "linux", Architecture: img.arch || "amd64", Size: e.imageSize(img),
+      Config: { User: img.config.User, Healthcheck: img.config.Healthcheck ? { Test: img.config.Healthcheck } : null, Volumes: (img.config.Volumes || []).length ? Object.fromEntries(img.config.Volumes.map((v) => [v, {}])) : null, ExposedPorts: Object.fromEntries((img.config.ExposedPorts || []).map((p) => [`${p}/tcp`, {}])), Env: img.config.Env, Cmd: img.config.Cmd, WorkingDir: img.config.WorkingDir, Entrypoint: img.config.Entrypoint, Labels: null },
       RootFS: { Type: "layers", Layers: img.layers.filter((l) => l.id).map((l) => `sha256:${l.id}`) }
     };
   }
@@ -977,6 +1182,11 @@
       if (!e.container(target)) return fail(`docker: Error response from daemon: could not get container for ${target}: No such container: ${target}`);
       links[alias || target] = target;
     }
+    if (f.pull === "always") {
+      const r = e.pullLines(ref);
+      if (r.error) return fail(`docker: Error response from daemon: ${r.error}`);
+      lines.push(...r.lines.slice(0, -1).map((l) => [l, "dim"]));
+    }
     let img = e.image(ref);
     if (!img) {
       lines.push([`Unable to find image '${normRef(ref)}' locally`, ""]);
@@ -985,16 +1195,29 @@
       lines.push(...r.lines.slice(0, -1).map((l) => [l, "dim"]));
       img = e.image(ref);
     }
+    if (f.platform && f.platform.replace(/\/v\d$/, "") !== `linux/${img.arch}`) return fail(`docker: Error response from daemon: image with reference ${ref} was found but its platform (linux/${img.arch}) does not match the specified platform (${f.platform}).`);
+    if (!f.platform && img.arch !== "amd64") lines.push([`WARNING: The requested image's platform (linux/${img.arch}/v8) does not match the detected host platform (linux/amd64/v3) and no specific platform was requested`, "warn"]);
     const ports = parsePorts(e, f.publish, f["publish-all"], img);
     if (ports.error) return fail(ports.error);
     const m = parseMounts(e, f);
     if (m.error) return fail(m.error);
+    // An image's VOLUME paths get an anonymous volume unless something is mounted there.
+    for (const v of img.config.Volumes || []) if (!m.mounts.some((x) => x.dest === v)) m.mounts.push({ type: "volume", name: e.id("anon" + v + m.mounts.length), dest: v, anon: true });
+    const driver = f["log-driver"] || e.daemon.conf["log-driver"] || "json-file";
+    if (!LOG_DRIVERS.includes(driver)) return fail(`docker: Error response from daemon: failed to create task for container: failed to initialize logging driver: logger: no log driver named '${driver}' is registered.`);
+    const envFile = f["env-file"] ? e.host[join(e.cwd, f["env-file"])] : null;
+    if (f["env-file"] && (!envFile || envFile.text === undefined)) return fail(`docker: open ${f["env-file"]}: no such file or directory.`);
     const entry = f.entrypoint !== undefined ? (f.entrypoint ? [f.entrypoint] : []) : img.config.Entrypoint;
     const c = newContainer(e, {
       name, image: ref, imageId: img.id, cmd: cmd.length ? cmd : f.entrypoint !== undefined ? [] : img.config.Cmd, entrypoint: entry, workdir: f.workdir, user: f.user,
       env: (f.env || []).filter((x) => x.includes("=")), tty: f.tty, interactive: f.interactive, rm: f.rm, ports: ports.ports, mounts: m.mounts, netMode,
-      aliases: f["network-alias"], links, memory, memorySwap, restart: f.restart, oomKillDisable: f["oom-kill-disable"], privileged: f.privileged, readOnly: f["read-only"]
+      aliases: f["network-alias"], links, memory, memorySwap, restart: f.restart, oomKillDisable: f["oom-kill-disable"], privileged: f.privileged, readOnly: f["read-only"],
+      capDrop: f["cap-drop"], capAdd: f["cap-add"], platform: f.platform,
+      extraHosts: Object.fromEntries((f["add-host"] || []).map((h) => { const [n, ip] = h.split(/:(.*)/); return [n, ip === "host-gateway" ? "172.17.0.1" : ip]; })),
+      health: f["no-healthcheck"] ? ["NONE"] : f["health-cmd"] ? ["CMD-SHELL", f["health-cmd"]] : null,
+      log: { type: driver, opts: f["log-opt"] ? Object.fromEntries(f["log-opt"].map((kv) => [kv.split("=")[0], kv.slice(kv.indexOf("=") + 1)])) : !f["log-driver"] ? { ...(e.daemon.conf["log-opts"] || {}) } : {} }
     });
+    if (envFile) c.env.unshift(...envFile.text.split("\n").map((l) => l.trim()).filter((l) => l.includes("=") && !l.startsWith("#")));
     for (const mt of c.mounts) if (mt.type === "volume") e.volume(mt.name, mt.anon);
     e.containers.push(c);
     if (create) return ok([...lines, c.id]);
@@ -1108,6 +1331,7 @@
     if (p.pos.length !== 1) return fail(["docker: 'logs' requires 1 argument.", "", "See 'docker logs --help' for more information"]);
     const c = e.container(p.pos[0]);
     if (!c) return fail(`Error response from daemon: No such container: ${p.pos[0]}`);
+    if (!["json-file", "local", "journald"].includes(c.log.type)) return fail("Error response from daemon: configured logging driver does not support reading");
     let logs = c.logs;
     if (p.flags.tail && p.flags.tail !== "all") logs = logs.slice(-Number(p.flags.tail) || logs.length);
     const out = ok(logs.map((l) => (p.flags.timestamps ? `${iso(c.startedAt)} ${l}` : l)));
@@ -1148,6 +1372,7 @@
       c.memory = mem;
       c.memorySwap = swap;
       if (f.restart) c.restart = f.restart;
+      if (c.state === "restarting" && c.restart === "no") c.state = "exited";
       return ok(c.name === p.pos.find((n) => e.container(n) === c) ? c.name : c.id.slice(0, 12));
     });
   }
@@ -1271,7 +1496,7 @@
       images: Object.keys(e.images).length, activeImages: used.size, imageSize: sum(layers), imageFree: sum(layers) - sum(active),
       containers: e.containers.length, running: e.containers.filter((c) => c.state === "running").length,
       volumes: vols.length, activeVolumes: vols.filter((v) => e.containers.some((c) => c.mounts.some((m) => m.name === v.name))).length,
-      volumeSize: vols.reduce((n, v) => n + volSize(v), 0), cacheCount: cache.length, cacheSize: cache.reduce((n, x) => n + (x.layer.size || 0), 0)
+      volumeSize: vols.reduce((n, v) => n + volSize(v), 0), volumeFree: vols.filter((v) => !e.containers.some((c) => c.mounts.some((m) => m.name === v.name))).reduce((n, v) => n + volSize(v), 0), cacheCount: cache.length, cacheSize: cache.reduce((n, x) => n + (x.layer.size || 0), 0)
     };
   }
   function prune(e, what, flags) {
@@ -1281,7 +1506,7 @@
       volume: "WARNING! This will remove anonymous local volumes not used by at least one container.",
       network: "WARNING! This will remove all custom networks not used by at least one container.",
       builder: "WARNING! This will remove all dangling build cache.",
-      system: "WARNING! This will remove:\n  - all stopped containers\n  - all networks not used by at least one container\n  - all dangling images\n  - unused build cache"
+      system: `WARNING! This will remove:\n  - all stopped containers\n  - all networks not used by at least one container${flags.volumes ? "\n  - all anonymous volumes not used by at least one container" : ""}\n  - ${flags.all ? "all images without at least one container associated to them" : "all dangling images"}\n  - ${flags.all ? "all build cache" : "unused build cache"}`
     }[what];
     if (!flags.force) return { code: 1, lines: [...warn.split("\n").map((l) => [l, ""]), ["Are you sure you want to continue? [y/N] ", ""], ["(the playground cannot answer prompts: add -f to confirm)", "na"]] };
     const lines = [];
@@ -1304,9 +1529,9 @@
         lines.push([`deleted: sha256:${img.id}`, ""]);
       }
     }
-    if (what === "volume") {
+    if (what === "volume" || (what === "system" && flags.volumes)) {
       for (const v of Object.values(e.volumes)) {
-        if ((!v.anon && !flags.all) || e.containers.some((c) => c.mounts.some((m) => m.name === v.name))) continue;
+        if ((!v.anon && (!flags.all || what === "system")) || e.containers.some((c) => c.mounts.some((m) => m.name === v.name))) continue;
         delete e.volumes[v.name];
         lines.push([v.name, ""]);
       }
@@ -1324,16 +1549,26 @@
 
   const KNOWN_RUN = ["echo", "ls", "cat", "mv", "cp", "ln", "test", "[", "sed", "grep", "tar", "unzip", "yarn", "mvn", "gradle", "pip", "pip3", "python", "python3", "go", "make", "git", "curl", "wget", "apt", "update-ca-certificates", "npx", "node", "true", "set", "export", "groupmod", "usermod", "touch", "find", "xargs"];
 
-  function runStep(st, cmdline, uid) {
+  // mounted: files present only while this step runs (RUN --mount=type=secret).
+  function runStep(st, cmdline, uid, mounted) {
     const before = st.fs;
-    const fs = { ...before };
+    const fs = { ...before, ...mounted };
     const out = [];
     let secs = 0.4;
     let wd = st.cfg.WorkingDir || "/";
+    const vars = { ...Object.fromEntries(st.cfg.Env.map((kv) => [kv.split("=")[0], kv.slice(kv.indexOf("=") + 1)])), ...st.args };
     for (const part of cmdline.split(/\s*(?:&&|;)\s*/).filter(Boolean)) {
-      const w = words(part);
+      const toks = lex(part, vars) || [];
+      const redirect = toks.findIndex((t) => t.op === ">" || t.op === ">>");
+      const w = (redirect >= 0 ? toks.slice(0, redirect) : toks).filter((t) => "w" in t).map((t) => t.w);
       const [cmd, ...a] = w;
       if (!cmd) continue;
+      if (redirect >= 0 && toks[redirect + 1] && (cmd === "echo" || cmd === "printf")) {
+        const target = join(wd, toks[redirect + 1].w);
+        const text = (cmd === "printf" ? a.join(" ").replace(/\\n/g, "\n") : a.join(" ") + "\n");
+        fs[target] = { text: toks[redirect].op === ">>" && fs[target] ? (fs[target].text || "") + text : text, uid, gid: uid, mode: 0o644 };
+        continue;
+      }
       const opts = a.filter((x) => x.startsWith("-"));
       const pos = a.filter((x, i) => !x.startsWith("-") && !(/^-[ugGgh]$/.test(a[i - 1] || "") || /^--(uid|gid|ingroup|home|shell)$/.test(a[i - 1] || "")));
       const valueOf = (...keys) => { for (const k of keys) { const i = a.indexOf(k); if (i >= 0) return a[i + 1]; const eq = a.find((x) => x.startsWith(k + "=")); if (eq) return eq.split("=")[1]; } return undefined; };
@@ -1343,6 +1578,8 @@
         if (!st.bins.has(cmd)) return { code: 127, out: [`/bin/sh: ${cmd}: not found`] };
         if (/^(ci|install|i)$/.test(sub)) {
           const pkg = fs[join(wd, "package.json")];
+          const npmrc = [join(wd, ".npmrc"), "/root/.npmrc"].map((x) => fs[x]).find((x) => x && /_authToken=\S+/.test(x.text || ""));
+          if (pkg && pkg.private && !npmrc) return { code: 1, out: ["npm error code E401", "npm error 401 Unauthorized - GET https://npm.pkg.github.com/@kitchen%2fpayments - authentication token not provided"] };
           if (!pkg) return { code: 254, out: ["npm error code ENOENT", "npm error syscall open", `npm error path ${join(wd, "package.json")}`, `npm error errno -2`, `npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '${join(wd, "package.json")}'`] };
           if (sub === "ci" && !fs[join(wd, "package-lock.json")]) return { code: 1, out: ["npm error code EUSAGE", "npm error", "npm error The `npm ci` command can only install with an existing package-lock.json or", "npm error npm-shrinkwrap.json with lockfileVersion >= 1. Run an install with npm@5 or", "npm error later to generate a package-lock.json file, then try again."] };
           const prod = opts.some((o) => /^--(omit=dev|only=prod(uction)?|production)$/.test(o));
@@ -1381,7 +1618,7 @@
               const uidN = /^\d+$/.test(u) ? Number(u) : (st.users[u] || [])[0];
               if (uidN === undefined) return { code: 1, out: [`chown: unknown user ${u}`] };
               fs[p] = { ...fs[p], uid: uidN, gid: g ? (/^\d+$/.test(g) ? Number(g) : st.groups[g] ?? uidN) : uidN };
-            } else fs[p] = { ...fs[p], mode: /^[0-7]+$/.test(spec) ? parseInt(spec, 8) : fs[p].mode };
+            } else fs[p] = { ...fs[p], mode: /^[0-7]+$/.test(spec) ? parseInt(spec, 8) : /^[ugoa]*\+x$/.test(spec) ? (fs[p].mode == null ? 0o644 : fs[p].mode) | 0o111 : fs[p].mode };
           }
         }
         continue;
@@ -1415,13 +1652,14 @@
       }
       if (!st.bins.has(cmd) && !KNOWN_RUN.includes(cmd)) return { code: 127, out: [`/bin/sh: ${cmd}: not found`] };
     }
+    for (const p of Object.keys(mounted || {})) if (fs[p] === mounted[p]) delete fs[p];
     const changed = Object.keys(fs).filter((p) => fs[p] !== before[p]);
     const size = changed.reduce((n, p) => n + (fs[p].whiteout ? 1200 : entrySize(fs[p])), 0);
-    return { code: 0, fs, size, out, secs };
+    return { code: 0, fs, size, out, secs, files: changed };
   }
 
   function dBuild(e, args) {
-    const p = parseFlags(args, flagSpec("no-cache q|quiet pull squash load push rm", "t|tag f|file build-arg target progress platform network", "tag build-arg"), false);
+    const p = parseFlags(args, flagSpec("no-cache q|quiet pull squash load push rm", "t|tag f|file build-arg target progress platform network secret", "tag build-arg secret"), false);
     if (p.error) return usage("buildx build", p.error);
     if (p.pos.length !== 1) return fail(['ERROR: "docker buildx build" requires exactly 1 argument.', "See 'docker buildx build --help'.", "", "Usage:  docker buildx build [OPTIONS] PATH | URL | -", "", "Start a build"]);
     if (p.flags.push || String(p.flags.platform || "").includes(",")) return LAB("Pushing or building for several platforms");
@@ -1492,6 +1730,10 @@
 
     const results = {};
     const steps = [];
+    const arch = p.flags.platform ? p.flags.platform.split("/")[1] : "amd64";
+    const diskBefore = e.diskUsed();
+    const added = [];
+    let fresh = 0;
     let total = 1.2 + ctxSize / (80 * MB);
     let doneCount = 0;
     const stepTotal = [...needed].reduce((n, i) => n + 1 + stages[i].instrs.filter((x) => /^(RUN|COPY|ADD|WORKDIR)$/.test(x.name)).length, 0);
@@ -1512,11 +1754,11 @@
       const parent = stageOf(s.from);
       if (parent && parent.index < i) {
         const r = results[parent.index];
-        st = { fs: r.fs, cfg: { ...r.cfg }, users: { ...r.users }, groups: { ...r.groups }, bins: new Set(r.bins), layers: [...r.layers], key: r.key, os: r.os };
+        st = { fs: r.fs, cfg: { ...r.cfg }, users: { ...r.users }, groups: { ...r.groups }, bins: new Set(r.bins), layers: [...r.layers], key: r.key, os: r.os, args: {} };
       } else {
         const base = e.image(s.from) || e.registry(s.from);
         if (!base) return failWith(`[${label}1/${n}] FROM ${fullRef(normRef(s.from))}`, null, `${s.from}: failed to resolve source metadata for ${fullRef(normRef(s.from))}: pull access denied, repository does not exist or may require authorization: server message: insufficient_scope: authorization failed`);
-        st = { fs: { ...base.fs }, cfg: JSON.parse(JSON.stringify(base.config)), users: { ...base.users }, groups: {}, bins: new Set(base.bins), layers: [...base.layers], key: `base:${base.id}`, os: base.os };
+        st = { fs: { ...base.fs }, cfg: JSON.parse(JSON.stringify(base.config)), users: { ...base.users }, groups: {}, bins: new Set(base.bins), layers: [...base.layers], key: `base:${base.id}:${arch}`, os: base.os, args: {} };
         row(`[${label}1/${n}] FROM ${fullRef(normRef(s.from))}@sha256:${(base.digest || base.id).slice(0, 64)}`, 0);
       }
       doneCount++;
@@ -1532,6 +1774,7 @@
           let srcFs = context, srcName = "context";
           if (flags.from) {
             const fromStage = stageOf(flags.from);
+            if (fromStage && !results[fromStage.index]) return failWith(`[${label}${k + 1}/${n}] ${ins.text}`, null, `circular dependency detected on stage: ${fromStage.name || fromStage.index}`);
             if (fromStage) { srcFs = results[fromStage.index].fs; srcName = fromStage.name; } else {
               const img = e.image(flags.from) || e.registry(flags.from);
               if (!img) return failWith(`[${label}${k + 1}/${n}] ${ins.text}`, null, `${flags.from}: failed to resolve source metadata for ${fullRef(normRef(flags.from))}: pull access denied, repository does not exist or may require authorization: server message: insufficient_scope: authorization failed`);
@@ -1563,8 +1806,10 @@
             const gidN = g ? (/^\d+$/.test(g) ? Number(g) : st.groups[g] ?? (st.users[g] || [])[1] ?? uidN) : (st.users[u] || [uidN, uidN])[1];
             for (const t of Object.keys(copied)) copied[t] = { ...copied[t], uid: uidN, gid: gidN };
           }
-          extra = Object.entries(copied).map(([t, x]) => `${t}:${entrySize(x)}:${x.v || 0}:${x.uid || 0}`).join(",");
+          if (flags.chmod && /^[0-7]{3,4}$/.test(flags.chmod)) for (const t of Object.keys(copied)) copied[t] = { ...copied[t], mode: parseInt(flags.chmod, 8) };
+          extra = Object.entries(copied).map(([t, x]) => `${t}:${entrySize(x)}:${x.v || 0}:${x.uid || 0}:${x.mode || 0}`).join(",");
         }
+        if (ins.name === "RUN") extra = JSON.stringify(st.args);
         st.key = hexOf(`${st.key}\n${ins.text}\n${extra}`);
         const isStep = /^(RUN|COPY|ADD|WORKDIR)$/.test(ins.name);
         const shown = isStep ? `[${label}${++k}/${n}] ${ins.name} ${ins.raw.replace(/\s+/g, " ")}` : null;
@@ -1579,10 +1824,20 @@
           if (shown) { row(`CACHED ${shown}`, 0); steps.push({ text: `${ins.name} ${ins.raw}`, cached: true, stage: s.name }); doneCount++; }
         } else if (ins.name === "RUN") {
           const who = st.cfg.User ? (st.users[st.cfg.User.split(":")[0]] || [Number(st.cfg.User) || 0])[0] : 0;
-          const r = runStep(st, rest.startsWith("[") ? argvOf(rest).slice(-1)[0] : rest, who);
+          // A secret mount puts the file in place for this step only, so no layer keeps it.
+          const mounted = {};
+          const mount = typeof flags.mount === "string" ? Object.fromEntries(flags.mount.split(",").map((kv) => kv.split("="))) : {};
+          if (mount.type === "secret") {
+            const given = (p.flags.secret || []).map((x) => Object.fromEntries(x.split(",").map((kv) => kv.split("=")))).find((x) => x.id === mount.id);
+            const src = given && (given.src || given.source) ? e.host[join(e.cwd, given.src || given.source)] : null;
+            if (src) mounted[norm(mount.target || mount.dst || `/run/secrets/${mount.id}`)] = { ...src, uid: 0 };
+          }
+          const r = runStep(st, rest.startsWith("[") ? argvOf(rest).slice(-1)[0] : rest, who, mounted);
           if (r.code) return failWith(shown, r.out, `process "/bin/sh -c ${rest}" did not complete successfully: exit code: ${r.code}`);
           st.fs = r.fs;
-          layer = { id: hexOf(`layer|${st.key}`), size: r.size, by: `RUN /bin/sh -c ${rest} # buildkit` };
+          const argList = Object.entries(st.args);
+          layer = { id: hexOf(`layer|${st.key}`), size: r.size, files: r.files, by: `RUN ${argList.length ? `|${argList.length} ${argList.map(([k, v]) => `${k}=${v}`).join(" ")} ` : ""}/bin/sh -c ${rest} # buildkit` };
+          fresh += r.size;
           row(shown, r.secs);
           total += r.secs;
           r.out.forEach((l, j) => log.push([`${(r.secs * (0.3 + j / 20)).toFixed(3)} ${l}`, "dim"]));
@@ -1591,7 +1846,8 @@
           for (const [t, x] of Object.entries(copied)) fs[t] = x;
           st.fs = fs;
           const size = Object.values(copied).reduce((a, x) => a + entrySize(x), 0);
-          layer = { id: hexOf(`layer|${st.key}`), size, by: `${ins.name} ${rest} # buildkit` };
+          layer = { id: hexOf(`layer|${st.key}`), size, files: Object.keys(copied), by: `${ins.name} ${rest} # buildkit` };
+          fresh += size;
           const secs = Math.max(0.1, size / (90 * MB));
           row(shown, secs);
           total += secs;
@@ -1603,7 +1859,7 @@
           }
           layer = { id: null, size: 0, by: ins.name === "EXPOSE" ? `EXPOSE map[${ins.raw.split(/\s+/).map((x) => (x.includes("/") ? x : x + "/tcp") + ":{}").join(" ")}]` : ins.name === "CMD" || ins.name === "ENTRYPOINT" ? `${ins.name} [${argvOf(ins.raw).map((x) => JSON.stringify(x)).join(" ")}]` : ins.text };
         }
-        if (!hit) e.cache.set(st.key, { fs: st.fs, users: { ...st.users }, groups: { ...st.groups }, bins: [...st.bins], layer });
+        if (!hit) { e.cache.set(st.key, { fs: st.fs, users: { ...st.users }, groups: { ...st.groups }, bins: [...st.bins], layer }); added.push(st.key); }
         if (!hit && shown) { steps.push({ text: `${ins.name} ${ins.raw}`, cached: false, stage: s.name }); doneCount++; }
         st.layers.push({ ...layer, created: e.now, comment: "buildkit.dockerfile.v0" });
         // Metadata: applied whether or not the step was cached.
@@ -1612,6 +1868,17 @@
           for (const [key, v] of pairs) st.cfg.Env = [...st.cfg.Env.filter((x) => !x.startsWith(key + "=")), `${key}=${v}`];
         }
         if (ins.name === "WORKDIR") st.cfg.WorkingDir = join(st.cfg.WorkingDir || "/", ins.raw);
+        if (ins.name === "ARG") {
+          const [k, dflt] = [ins.raw.split("=")[0].trim(), ins.raw.includes("=") ? ins.raw.slice(ins.raw.indexOf("=") + 1) : undefined];
+          const given = (p.flags["build-arg"] || []).find((x) => x.split("=")[0] === k);
+          const v = given !== undefined ? given.slice(given.indexOf("=") + 1) : dflt;
+          if (v !== undefined) st.args[k] = v;
+        }
+        if (ins.name === "VOLUME") st.cfg.Volumes = [...new Set([...(st.cfg.Volumes || []), ...(execForm(ins.raw) || ins.raw.split(/\s+/))])];
+        if (ins.name === "HEALTHCHECK") {
+          const hc = ins.raw.replace(/^(--[\w-]+=\S+\s+)+/, "");
+          st.cfg.Healthcheck = /^NONE$/i.test(hc) ? ["NONE"] : execForm(hc.replace(/^CMD\s+/i, "")) ? ["CMD", ...execForm(hc.replace(/^CMD\s+/i, ""))] : ["CMD-SHELL", hc.replace(/^CMD\s+/i, "")];
+        }
         if (ins.name === "USER") st.cfg.User = ins.raw;
         if (ins.name === "CMD") st.cfg.Cmd = argvOf(ins.raw);
         if (ins.name === "ENTRYPOINT") { st.cfg.Entrypoint = argvOf(ins.raw); if (!cmdReset) st.cfg.Cmd = null; }
@@ -1621,10 +1888,14 @@
       results[i] = st;
     }
 
+    if (diskBefore + fresh > e.capacity) {
+      for (const k of added) e.cache.delete(k);
+      return failWith("exporting to image", null, "failed to copy files: copy file range failed: no space left on device");
+    }
     const r = results[final];
     const id = hexOf(`image|${r.key}`);
     const existing = e.images[id];
-    const img = existing || { id, created: e.now, layers: r.layers, fs: r.fs, users: r.users, bins: r.bins, os: r.os, config: r.cfg, built: e.ready };
+    const img = existing || { id, created: e.now, layers: r.layers, fs: r.fs, users: r.users, bins: r.bins, os: r.os, arch, config: r.cfg, built: e.ready };
     if (e.ready) img.built = true;
     const exportSecs = existing ? 0 : Math.min(9, e.imageSize(img) / (400 * MB));
     total += exportSecs;
@@ -1638,7 +1909,259 @@
     return { code: 0, lines: [[`[+] Building ${total.toFixed(1)}s (${stepTotal + 3}/${stepTotal + 3}) FINISHED`.padEnd(66) + "docker:default", ""], ...log] };
   }
 
-  function docker(e, args) {
+  // --- docker compose --------------------------------------------------------------
+
+  // Enough YAML for compose files: nested maps, lists, inline [a, b], quotes, comments.
+  function yaml(text) {
+    const lines = text.split(/\r?\n/).map((raw, n) => ({ raw: raw.replace(/(^|\s)#.*$/, "").replace(/\s+$/, ""), n: n + 1 })).filter((l) => l.raw.trim());
+    let i = 0;
+    const indent = (l) => l.raw.length - l.raw.trimStart().length;
+    const isItem = (l) => /^-(\s|$)/.test(l.raw.trimStart());
+    const bad = (l, msg) => { throw new Error(`yaml: line ${l.n}: ${msg}`); };
+    const scalar = (s) => {
+      s = s.trim();
+      if (/^"[^"]*"$|^'[^']*'$/.test(s)) return s.slice(1, -1);
+      if (/^\[.*\]$/.test(s)) return s.slice(1, -1).split(",").map(scalar).filter((x) => x !== "");
+      if (/^\{\s*\}$/.test(s)) return {};
+      if (/^["']/.test(s)) bad(lines[Math.max(0, i - 1)], "found unexpected end of stream");
+      return s;
+    };
+    const nested = (ind) => (i < lines.length && indent(lines[i]) > ind ? block(indent(lines[i])) : i < lines.length && indent(lines[i]) === ind && isItem(lines[i]) ? block(ind) : null);
+    function block(ind) {
+      if (isItem(lines[i])) {
+        const arr = [];
+        while (i < lines.length && indent(lines[i]) === ind && isItem(lines[i])) {
+          const item = lines[i].raw.trimStart().slice(1).trim();
+          i++;
+          const kv = /^([\w.-]+):(?:\s+(.*))?$/.exec(item);
+          if (!item) arr.push(nested(ind));
+          else if (kv) {
+            const obj = { [kv[1]]: kv[2] !== undefined ? scalar(kv[2]) : nested(ind + 2) };
+            if (i < lines.length && indent(lines[i]) === ind + 2 && !isItem(lines[i])) Object.assign(obj, block(ind + 2));
+            arr.push(obj);
+          } else arr.push(scalar(item));
+        }
+        return arr;
+      }
+      const obj = {};
+      while (i < lines.length && indent(lines[i]) === ind && !isItem(lines[i])) {
+        const l = lines[i];
+        const m = /^("[^"]+"|'[^']+'|[^:\s][^:]*?):(?:\s+(.*))?$/.exec(l.raw.trim());
+        if (!m) bad(l, "could not find expected ':'");
+        i++;
+        const key = m[1].replace(/^["']|["']$/g, "");
+        if (m[2] && /^[|>]-?$/.test(m[2])) {
+          const parts = [];
+          while (i < lines.length && indent(lines[i]) > ind) parts.push(lines[i++].raw.trim());
+          obj[key] = parts.join(m[2].startsWith("|") ? "\n" : " ");
+        } else obj[key] = m[2] !== undefined ? scalar(m[2]) : nested(ind);
+      }
+      if (i < lines.length && indent(lines[i]) > ind) bad(lines[i], "mapping values are not allowed in this context");
+      return obj;
+    }
+    return lines.length ? block(indent(lines[0])) : {};
+  }
+
+  const COMPOSE_FILES = ["compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"];
+  // Read the project in the current folder: interpolate variables, parse, normalise.
+  function composeProject(e) {
+    const path = COMPOSE_FILES.map((f) => join(e.cwd, f)).find((p) => e.host[p] && e.host[p].text !== undefined);
+    if (!path) return { error: "no configuration file provided: not found" };
+    const dotenv = e.host[join(e.cwd, ".env")];
+    const vars = {};
+    for (const l of dotenv && dotenv.text ? dotenv.text.split("\n") : []) {
+      const m = /^\s*([A-Za-z_]\w*)\s*=\s*(.*)$/.exec(l);
+      if (m) vars[m[1]] = m[2].replace(/^["']|["']$/g, "");
+    }
+    Object.assign(vars, e.env);
+    const warnings = [];
+    const text = e.host[path].text.replace(/\$\$|\$\{(\w+)(?:(:?[-?])([^}]*))?\}|\$(\w+)/g, (m, a, op, alt, b) => {
+      if (m === "$$") return "$";
+      const k = a || b;
+      const v = vars[k];
+      if (v === undefined || (op && op.startsWith(":") && v === "")) {
+        if (op && op.endsWith("-")) return alt;
+        if (!warnings.includes(k)) warnings.push(k);
+        return "";
+      }
+      return v;
+    });
+    let doc;
+    try { doc = yaml(text); } catch (err) { return { error: err.message }; }
+    const project = String(doc.name || e.cwd.split("/").pop()).toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    const services = {};
+    for (const [name, s0] of Object.entries(doc.services || {})) {
+      const s = s0 || {};
+      const env = Array.isArray(s.environment) ? s.environment.map(String) : Object.entries(s.environment || {}).map(([k, v]) => `${k}=${v ?? ""}`);
+      const deps = Array.isArray(s.depends_on) ? Object.fromEntries(s.depends_on.map((d) => [d, "service_started"])) : Object.fromEntries(Object.entries(s.depends_on || {}).map(([d, o]) => [d, (o && o.condition) || "service_started"]));
+      for (const d of Object.keys(deps)) if (!(doc.services || {})[d]) return { error: `service "${name}" depends on undefined service "${d}": invalid compose project` };
+      const hc = s.healthcheck && s.healthcheck.test;
+      services[name] = {
+        name, image: s.image || (s.build ? `${project}-${name}` : null), build: s.build ? (typeof s.build === "string" ? s.build : s.build.context || ".") : null,
+        ports: (s.ports || []).map(String), env, volumes: (s.volumes || []).map(String), deps, restart: s.restart || "no",
+        command: s.command ? (Array.isArray(s.command) ? s.command : words(s.command)) : null,
+        health: s.healthcheck && s.healthcheck.disable === "true" ? ["NONE"] : hc ? (Array.isArray(hc) ? hc : ["CMD-SHELL", hc]) : null,
+        user: s.user, readOnly: s.read_only === "true", capDrop: s.cap_drop || [], capAdd: s.cap_add || [], memory: s.mem_limit ? parseBytes(s.mem_limit) : 0,
+        log: s.logging ? { type: s.logging.driver || "json-file", opts: s.logging.options || {} } : null
+      };
+      if (!services[name].image) return { error: `service "${name}" has neither an image nor a build context specified: invalid compose project` };
+    }
+    if (!Object.keys(services).length) return { error: "no service selected" };
+    return { project, services, volumes: Object.keys(doc.volumes || {}), text, warnings: warnings.map((k) => `WARN[0000] The "${k}" variable is not set. Defaulting to a blank string.`) };
+  }
+
+  const composeRow = (kind, name, status, secs) => ` ✔ ${kind} ${name}`.padEnd(46) + status.padEnd(28) + `${secs.toFixed(1)}s`;
+  function compose(e, args) {
+    const [sub, ...rest] = args;
+    if (!sub) return ok(["Usage:  docker compose [OPTIONS] COMMAND", "", "Define and run multi-container applications with Docker"]);
+    const p = parseFlags(rest, flagSpec("d|detach v|volumes a|all build no-deps f|follow q|quiet", "t|timeout n|tail", ""), sub === "exec");
+    if (p.error) return usage(`compose ${sub}`, p.error);
+    const pr = composeProject(e);
+    if (pr.error) return fail(pr.error);
+    const warn = pr.warnings.map((w) => [w, "warn"]);
+    const net = `${pr.project}_default`;
+    const cname = (s) => `${pr.project}-${s}-1`;
+    const mine = () => e.containers.filter((c) => c.compose && c.compose.project === pr.project);
+    const picked = (p.pos.length ? p.pos : Object.keys(pr.services));
+    for (const s of p.pos) if (sub !== "exec" && !pr.services[s]) return fail(`no such service: ${s}`);
+
+    if (sub === "config") return { code: 0, lines: [...warn, ...pr.text.replace(/\n$/, "").split("\n").map((l) => [l, ""])] };
+    if (sub === "ps") {
+      const list = mine().filter((c) => p.flags.all || c.state === "running" || c.state === "restarting");
+      return { code: 0, lines: [...warn, ...table([["NAME", "IMAGE", "COMMAND", "SERVICE", "CREATED", "STATUS", "PORTS"],
+        ...list.map((c) => [c.name, c.image, cmdOf(c), c.compose.service, `${duration(e.now - c.created)} ago`, statusOf(e, c), portsOf(e, c)])]).map((l, i) => [l, i ? "row" : "head"])] };
+    }
+    if (sub === "logs") {
+      const list = mine().filter((c) => !p.pos.length || p.pos.includes(c.compose.service));
+      const w = Math.max(0, ...list.map((c) => c.compose.service.length + 2));
+      return { code: 0, lines: [...warn, ...list.flatMap((c) => c.logs.slice(-(Number(p.flags.tail) || c.logs.length)).map((l) => [`${(c.compose.service + "-1").padEnd(w)}  | ${l}`, ""]))] };
+    }
+    if (sub === "exec") {
+      const [svc, ...cmd] = p.pos;
+      const c = mine().find((x) => x.compose.service === svc);
+      if (!c) return fail(`service "${svc}" is not running`);
+      return dExec(e, [c.name, ...cmd]);
+    }
+    if (sub === "down" || sub === "stop" || sub === "restart" || sub === "start") {
+      const lines = [...warn];
+      const list = mine().filter((c) => !p.pos.length || p.pos.includes(c.compose.service));
+      for (const c of list) {
+        if (sub === "start") { if (c.state !== "running") e.start(c); lines.push([composeRow("Container", c.name, "Started", 0.3), ""]); continue; }
+        e.stop(c);
+        if (sub === "restart") { c.stopped = false; e.start(c); lines.push([composeRow("Container", c.name, "Started", 0.6), ""]); continue; }
+        lines.push([composeRow("Container", c.name, "Stopped", 0.3), ""]);
+        if (sub === "down") { e.remove(c, p.flags.volumes); lines.push([composeRow("Container", c.name, "Removed", 0.1), ""]); }
+      }
+      if (sub === "down") {
+        if (p.flags.volumes) for (const v of pr.volumes) if (e.volumes[`${pr.project}_${v}`]) { delete e.volumes[`${pr.project}_${v}`]; lines.push([composeRow("Volume", `${pr.project}_${v}`, "Removed", 0.1), ""]); }
+        if (e.networks[net]) { delete e.networks[net]; lines.push([composeRow("Network", net, "Removed", 0.2), ""]); }
+      }
+      const body = lines.slice(warn.length);
+      return { code: 0, lines: [...warn, [`[+] Running ${body.length}/${body.length}`, ""], ...body] };
+    }
+    if (sub !== "up" && sub !== "build" && sub !== "pull") return LAB(`docker compose ${sub}`);
+
+    // up: dependencies first, then each service; create, recreate or leave it.
+    const order = [];
+    const visit = (s, seen = []) => {
+      if (order.includes(s) || seen.includes(s)) return;
+      for (const d of Object.keys(pr.services[s].deps)) visit(d, [...seen, s]);
+      order.push(s);
+    };
+    picked.forEach((s) => visit(s));
+    const lines = [...warn];
+    const rows = [];
+    const done = () => ({ code: 0, lines: [...lines, [`[+] Running ${rows.length}/${rows.length}`, ""], ...rows.map((x) => [x, ""])] });
+    for (const s of order) {
+      const svc = pr.services[s];
+      if (svc.build && (sub !== "up" || p.flags.build || !e.image(svc.image))) {
+        const cwd = e.cwd;
+        const b = dBuild(e, ["-t", svc.image, svc.build]);
+        e.cwd = cwd;
+        lines.push(...b.lines);
+        if (b.code) return { code: 1, lines };
+      }
+    }
+    if (sub === "build") return { code: 0, lines };
+    if (!e.networks[net]) { e.addNetwork(net, "bridge"); rows.push(composeRow("Network", net, "Created", 0.1)); }
+    for (const v of pr.volumes) if (!e.volumes[`${pr.project}_${v}`]) { e.volume(`${pr.project}_${v}`, false); rows.push(composeRow("Volume", `"${pr.project}_${v}"`, "Created", 0)); }
+    for (const s of order) {
+      const svc = pr.services[s];
+      let img = e.image(svc.image);
+      if (!img) {
+        const r = e.pullLines(svc.image);
+        if (r.error) return { code: 1, lines: [...lines, ...rows.map((x) => [x, ""]), [` ✘ ${s} Error ${r.error}`, "warn"], [`Error response from daemon: ${r.error}`, "warn"]] };
+        rows.push(` ✔ ${s} Pulled`.padEnd(74) + "2.4s");
+        img = e.image(svc.image);
+      }
+      if (sub === "pull") continue;
+      const hash = hexOf(JSON.stringify(svc) + img.id);
+      let c = mine().find((x) => x.compose.service === s);
+      let verb = "Started";
+      if (c && c.compose.hash !== hash) { e.stop(c); e.remove(c, false); c = null; verb = "Recreated"; }
+      // Wait for dependencies that must be healthy first.
+      let waited = false;
+      for (const [d, cond] of Object.entries(svc.deps)) {
+        const dc = mine().find((x) => x.compose.service === d);
+        if (!dc || cond !== "service_healthy") continue;
+        if (!(dc.health || e.images[dc.imageId].config.Healthcheck)) return { code: 1, lines: [...lines, ...rows.map((x) => [x, ""]), [`dependency failed to start: container ${dc.name} has no healthcheck configured`, "warn"]] };
+        const start = e.now;
+        while (e.now - start < 60000 && dc.state === "running" && (e.health(dc) || {}).status !== "healthy") e.tick(1000);
+        if (dc.state !== "running") return { code: 1, lines: [...lines, ...rows.map((x) => [x, ""]), [`dependency failed to start: container ${dc.name} exited (${dc.exitCode})`, "warn"]] };
+        if ((e.health(dc) || {}).status !== "healthy") return { code: 1, lines: [...lines, ...rows.map((x) => [x, ""]), [`dependency failed to start: container ${dc.name} is unhealthy`, "warn"]] };
+        rows.push(composeRow("Container", dc.name, "Healthy", (e.now - start) / 1000 + 0.5));
+        waited = true;
+      }
+      if (c && c.state === "running") { rows.push(composeRow("Container", c.name, "Running", 0)); continue; }
+      if (!c) {
+        const ports = parsePorts(e, svc.ports, false, img);
+        if (ports.error) return fail(ports.error);
+        const m = parseMounts(e, { volume: svc.volumes.map((v) => (/^[\w][\w.-]*:/.test(v) && pr.volumes.includes(v.split(":")[0]) ? `${pr.project}_${v}` : v)) });
+        if (m.error) return fail(m.error);
+        for (const v of img.config.Volumes || []) if (!m.mounts.some((x) => x.dest === v)) m.mounts.push({ type: "volume", name: e.id("anon" + v + s), dest: v, anon: true });
+        c = newContainer(e, {
+          name: cname(s), image: svc.image, imageId: img.id, cmd: svc.command || img.config.Cmd, entrypoint: img.config.Entrypoint, user: svc.user, env: svc.env,
+          ports: ports.ports, mounts: m.mounts, netMode: net, aliases: [s], restart: svc.restart, memory: svc.memory, memorySwap: svc.memory * 2,
+          readOnly: svc.readOnly, capDrop: svc.capDrop, capAdd: svc.capAdd, health: svc.health, log: svc.log
+        });
+        for (const mt of c.mounts) if (mt.type === "volume") e.volume(mt.name, mt.anon);
+        c.compose = { project: pr.project, service: s, hash };
+        e.containers.push(c);
+        if (verb === "Started") rows.push(composeRow("Container", c.name, "Created", 0.1));
+      }
+      c.compose.waited = waited;
+      c.stopped = false;
+      const err = e.start(c);
+      if (err) return { code: 1, lines: [...lines, ...rows.map((x) => [x, ""]), [` ✘ Container ${c.name}  Error`, "warn"], [`Error response from daemon: ${err}`, "warn"]] };
+      rows.push(composeRow("Container", c.name, verb, 0.4));
+    }
+    const out = done();
+    if (sub === "up" && !p.flags.detach) {
+      const list = order.map((s) => mine().find((x) => x.compose.service === s)).filter(Boolean);
+      out.lines.push([`Attaching to ${list.map((c) => `${c.compose.service}-1`).join(", ")}`, ""], ...list.flatMap((c) => c.logs.map((l) => [`${c.compose.service}-1  | ${l}`, ""])),
+        ...list.filter((c) => c.state !== "running").map((c) => [`${c.compose.service}-1 exited with code ${c.exitCode}`, ""]), ["(attached: a real terminal keeps showing the logs until you press Ctrl+C. Add -d to run it in the background.)", "dim"]);
+    }
+    return out;
+  }
+
+  function login(e, args, stdin) {
+    const p = parseFlags(args, flagSpec("password-stdin", "u|username p|password", ""), false);
+    if (p.error) return usage("login", p.error);
+    const server = !p.pos[0] || /^(docker\.io|index\.docker\.io|registry-1\.docker\.io|https:\/\/index\.docker\.io\/v1\/)$/.test(p.pos[0]) ? "docker.io" : p.pos[0];
+    const lines = [];
+    let secret = p.flags.password;
+    if (p.flags["password-stdin"]) {
+      if (!p.flags.username) return fail("Error: Must provide --username with --password-stdin");
+      secret = (stdin || "").trim();
+      if (!secret) return fail("Error: Cannot perform an interactive login from a non TTY device");
+    } else if (secret) lines.push(["WARNING! Using --password via the CLI is insecure. Use --password-stdin.", "warn"]);
+    else return na("docker login asks for a password. In the playground, pipe a token in: echo $TOKEN | docker login <registry> -u <user> --password-stdin");
+    if (!p.flags.username) return fail("Error: Cannot perform an interactive login from a non TTY device");
+    e.logins.add(server);
+    return ok([...lines, ["Login Succeeded", ""]]);
+  }
+
+  function docker(e, args, stdin) {
     let [sub, ...rest] = args;
     const groups = {
       container: { ls: "ps", list: "ps", run: "run", create: "create", start: "start", stop: "stop", restart: "restart", rm: "rm", remove: "rm", kill: "kill", logs: "logs", inspect: "inspect", exec: "exec", prune: "container-prune", port: "port", stats: "stats", update: "update" },
@@ -1663,6 +2186,23 @@
         return ok(["Client: Docker Engine - Community", " Version:    28.0.4", " Context:    default", "", "Server:", ` Containers: ${d.containers}`, `  Running: ${d.running}`, "  Paused: 0", `  Stopped: ${d.containers - d.running}`, ` Images: ${d.images}`, " Server Version: 28.0.4", " Storage Driver: overlay2", " Cgroup Driver: systemd", " Cgroup Version: 2", " Default Runtime: runc", " Kernel Version: 6.8.0-45-generic", " Operating System: Ubuntu 24.04.1 LTS", " CPUs: 4", " Total Memory: 7.7GiB", " Docker Root Dir: /var/lib/docker"]);
       }
       case "run": return dRun(e, rest, false);
+      case "login": return login(e, rest, stdin);
+      case "logout": {
+        const server = rest[0] && !/docker\.io/.test(rest[0]) ? rest[0] : "docker.io";
+        if (!e.logins.has(server)) return ok(`Not logged in to ${server === "docker.io" ? "https://index.docker.io/v1/" : server}`);
+        e.logins.delete(server);
+        return ok(`Removing login credentials for ${server === "docker.io" ? "https://index.docker.io/v1/" : server}`);
+      }
+      case "rename": {
+        const [from, to] = rest;
+        if (!from || !to) return fail(["docker: 'rename' requires 2 arguments.", "", "See 'docker rename --help' for more information"]);
+        const c = e.container(from);
+        if (!c) return fail(`Error response from daemon: No such container: ${from}`);
+        const taken = e.container(to);
+        if (taken && taken.name === to) return fail(`Error response from daemon: Error when allocating new name: Conflict. The container name "/${to}" is already in use by container "${taken.id}". You have to remove (or rename) that container to be able to reuse that name.`);
+        c.name = to;
+        return ok([]);
+      }
       case "create": return dRun(e, rest, true);
       case "ps": return dPs(e, rest);
       case "images": return dImages(e, rest);
@@ -1738,7 +2278,7 @@
         return { code: 0, lines: table([["TYPE", "TOTAL", "ACTIVE", "SIZE", "RECLAIMABLE"],
           ["Images", d.images, d.activeImages, human(d.imageSize), pct(d.imageFree, d.imageSize)],
           ["Containers", d.containers, d.running, human(d.containers * 1100), `${human((d.containers - d.running) * 1100)} (${d.containers ? Math.round((d.containers - d.running) / d.containers * 100) : 0}%)`],
-          ["Local Volumes", d.volumes, d.activeVolumes, human(d.volumeSize), "0B (0%)"],
+          ["Local Volumes", d.volumes, d.activeVolumes, human(d.volumeSize), pct(d.volumeFree, d.volumeSize)],
           ["Build Cache", d.cacheCount, 0, human(d.cacheSize), human(d.cacheSize)]]).map((l, i) => [l, i ? "row" : "head"]) };
       }
       case "container-prune": case "image-prune": case "system-prune": case "builder-prune": {
@@ -1746,7 +2286,8 @@
         if (p.error) return usage(sub.replace("-", " "), p.error);
         return prune(e, sub.split("-")[0], p.flags);
       }
-      case "compose": case "login": case "logout": case "push": case "scout": case "cp": case "events": case "attach": case "commit": case "save": case "load": case "export": case "import": case "context": case "swarm": case "service": case "stack": case "search": case "init": case "debug": case "top": case "pause": case "unpause": case "wait": case "rename": case "diff": case "secret": case "config": case "plugin": case "trust": case "manifest": case "node":
+      case "compose": return compose(e, rest);
+      case "push": case "scout": case "cp": case "events": case "attach": case "commit": case "save": case "load": case "export": case "import": case "context": case "swarm": case "service": case "stack": case "search": case "init": case "debug": case "top": case "pause": case "unpause": case "wait": case "diff": case "secret": case "config": case "plugin": case "trust": case "manifest": case "node":
         return LAB(`docker ${sub}`);
       default:
         return fail([`docker: unknown command: docker ${sub}`, "", "Run 'docker --help' for more information"]);
@@ -1763,6 +2304,28 @@
     const pos = a.filter((x) => !/^-/.test(x));
     switch (cmd) {
       case "pwd": return say(e.cwd);
+      case "export": {
+        for (const kv of a) {
+          if (!/^[A-Za-z_]\w*=/.test(kv)) return err(`bash: export: \`${kv}': not a valid identifier`);
+          e.env[kv.split("=")[0]] = kv.slice(kv.indexOf("=") + 1);
+        }
+        return ok([]);
+      }
+      case "unset": { for (const k of a) delete e.env[k]; return ok([]); }
+      case "env": case "printenv": return say([`HOME=${HOME}`, `PWD=${e.cwd}`, "USER=dev", ...Object.entries(e.env).map(([k, v]) => `${k}=${v}`)].join("\n"));
+      case "df": {
+        const g = (b) => (b >= 10 * GB ? `${Math.round(b / 1024 / MiB)}G` : `${(b / 1024 / MiB).toFixed(1)}G`);
+        const used = e.diskUsed();
+        return ok(table([["Filesystem", "Size", "Used", "Avail", "Use%", "Mounted on"], ["/dev/sda1", g(e.capacity), g(used), g(Math.max(0, e.capacity - used)), `${Math.min(100, Math.round(used / e.capacity * 100))}%`, "/"]]), "row");
+      }
+      case "truncate": {
+        const target = pos[pos.length - 1] || "";
+        const c = e.containers.find((x) => target.includes(x.id));
+        if (!a.includes("-s") || !c) return err(`truncate: cannot open '${target}' for writing: No such file or directory`);
+        if (!sudo) return err(`truncate: cannot open '${target}' for writing: Permission denied`);
+        c.logBytes = 0;
+        return ok([]);
+      }
       case "cd": {
         const to = join(e.cwd, (a[0] || HOME).replace(/^~/, HOME));
         const st = stat(e.host, to);
@@ -1775,7 +2338,59 @@
       case "cat": return catLines(e.host, e.cwd, a, "cat");
       case "echo": return say(a[0] === "-n" ? a.slice(1).join(" ") : a.join(" "));
       case "printf": return { code: 0, lines: (a[0] || "").replace(/%s/g, () => a.splice(1, 1)[0] || "").replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\n$/, "").split("\n").map((l) => [l, ""]) };
-      case "id": return say(sudo ? "uid=0(root) gid=0(root) groups=0(root)" : "uid=1000(dev) gid=1000(dev) groups=1000(dev),27(sudo),998(docker)");
+      case "id": return say(sudo ? "uid=0(root) gid=0(root) groups=0(root)" : `uid=1000(dev) gid=1000(dev) groups=1000(dev),27(sudo)${e.groups.includes("docker") ? ",998(docker)" : ""}`);
+      case "groups": return say(sudo ? "root" : e.groups.join(" "));
+      case "usermod": {
+        if (!sudo) return err("usermod: Permission denied.\nusermod: cannot lock /etc/passwd; try again later.");
+        const g = a[a.indexOf("-aG") + 1] || a[a.indexOf("-G") + 1];
+        if (!a.includes("-aG") && !(a.includes("-a") && a.includes("-G"))) return na("The playground runs usermod -aG <group> <user>.");
+        if (g !== "docker" || pos[pos.length - 1] !== "dev") return err(`usermod: group '${g}' does not exist`);
+        if (!e.pendingGroups.includes(g)) e.pendingGroups.push(g);
+        return ok([]);
+      }
+      case "newgrp": {
+        if (!e.pendingGroups.includes(a[0]) && !e.groups.includes(a[0])) return err("newgrp: failed to crypt password with previous salt: Invalid argument");
+        if (!e.groups.includes(a[0])) e.groups.push(a[0]);
+        return ok([]);
+      }
+      case "systemctl": case "service": {
+        const [verb, unit] = cmd === "service" ? [a[1], a[0]] : [a[0], a[1]];
+        if (!/^docker(\.service)?$/.test(unit || "")) return LAB(`${cmd} for ${unit || "that unit"}`);
+        if (verb === "status" || verb === "is-active") {
+          const since = `since Fri 2026-10-30 ${new Date(e.daemon.since || e.now).toISOString().slice(11, 19)} UTC`;
+          return ok(verb === "is-active" ? [e.daemon.up ? "active" : "failed"] : ["● docker.service - Docker Application Container Engine", "     Loaded: loaded (/usr/lib/systemd/system/docker.service; enabled; preset: enabled)",
+            e.daemon.up ? `     Active: active (running) ${since}` : `     Active: failed (Result: exit-code) ${since}`, "TriggeredBy: ● docker.socket", "       Docs: https://docs.docker.com"]);
+        }
+        if (!sudo) return err(`Failed to ${verb} docker.service: Access denied\nSee system logs and 'systemctl status docker.service' for details.`);
+        if (verb === "stop") { daemonStop(e); return ok([]); }
+        if (verb === "start" || verb === "restart") {
+          if (verb === "restart") daemonStop(e);
+          const why = daemonStart(e);
+          return why ? err('Job for docker.service failed because the control process exited with error code.\nSee "systemctl status docker.service" and "journalctl -xeu docker.service" for details.') : ok([]);
+        }
+        return LAB(`systemctl ${verb}`);
+      }
+      case "journalctl": {
+        const t = new Date(e.daemon.since || e.now).toISOString().slice(11, 19);
+        return ok(e.daemon.error ? [`Oct 30 ${t} server dockerd[1187]: ${e.daemon.error}`, `Oct 30 ${t} server systemd[1]: docker.service: Main process exited, code=exited, status=1/FAILURE`,
+          `Oct 30 ${t} server systemd[1]: docker.service: Failed with result 'exit-code'.`, `Oct 30 ${t} server systemd[1]: Failed to start docker.service - Docker Application Container Engine.`]
+          : [`Oct 30 ${t} server dockerd[1187]: time="2026-10-30T${t}Z" level=info msg="API listen on /run/docker.sock"`, `Oct 30 ${t} server systemd[1]: Started docker.service - Docker Application Container Engine.`]);
+      }
+      case "ufw": {
+        if (!sudo) return err("ERROR: You need to be root to run this script");
+        if (a[0] === "status") return ok(["Status: active", "", "To                         Action      From", "--                         ------      ----", ...e.firewall]);
+        if (/^(deny|allow|reject)$/.test(a[0]) && a[1]) { e.firewall.push(`${a[1].padEnd(27)}${a[0].toUpperCase().padEnd(12)}Anywhere`); return ok(["Rule added", "Rule added (v6)"]); }
+        return na("The playground runs ufw status, ufw deny <port> and ufw allow <port>.");
+      }
+      case "iptables": {
+        if (!sudo) return err("iptables v1.8.10 (nf_tables): Could not fetch rule set generation id: Permission denied (you must be root)");
+        if (!a.includes("-L")) return na("The playground lists rules: sudo iptables -L DOCKER -n");
+        const rows = e.containers.filter((c) => c.state === "running").flatMap((c) => c.ports.map((p) => `ACCEPT     tcp  --  0.0.0.0/0            ${(Object.values(c.nets)[0] || {}).ip || ""}           tcp dpt:${p.cont}`));
+        return ok(["Chain DOCKER (2 references)", "target     prot opt source               destination", ...rows]);
+      }
+      case "ss": case "netstat": return ok(["State   Recv-Q  Send-Q  Local Address:Port  Peer Address:Port", "LISTEN  0       4096    0.0.0.0:22          0.0.0.0:*", ...Object.keys(e.hostServices).map((p) => `LISTEN  0       511     0.0.0.0:${p}        0.0.0.0:*`),
+        ...e.containers.filter((c) => c.state === "running").flatMap((c) => c.ports.map((p) => `LISTEN  0       4096    ${p.hostIp || "0.0.0.0"}:${p.host}        0.0.0.0:*`))]);
+      case "redis-cli": return Object.values(e.hostServices).includes("redis") ? say("PONG") : err("Could not connect to Redis at 127.0.0.1:6379: Connection refused");
       case "whoami": return say(sudo ? "root" : "dev");
       case "touch": {
         for (const f of pos) {
@@ -1846,7 +2461,10 @@
       }
       case "du": {
         const lines = [];
+        const human1024 = (n) => (n >= GB ? (n / 1024 / MiB).toFixed(1) + "G" : n >= MiB ? Math.round(n / MiB) + "M" : Math.max(4, Math.round(n / 1024)) + "K");
         for (const f of pos.length ? pos : ["."]) {
+          const logOf = e.containers.find((c) => f.includes(c.id));
+          if (logOf) { if (!sudo) return err(`du: cannot read directory '${f}': Permission denied`); lines.push(`${human1024(logOf.logBytes)}\t${f}`); continue; }
           const p = join(e.cwd, f);
           if (!stat(e.host, p)) return err(`du: cannot access '${f}': No such file or directory`);
           const n = sizeUnder(e.host, p);
@@ -1866,12 +2484,19 @@
         if (!a.includes("-i")) return na("The playground runs sed -i to edit a file in place: sed -i 's/old/new/' Dockerfile");
         const [expr, file] = pos;
         const m = /^s(.)(.*?)\1(.*?)\1(g?)$/.exec(expr || "");
+        const del = /^\/(.+)\/d$/.exec(expr || "");
         const p = join(e.cwd, file || "");
+        if (del && e.host[p] && e.host[p].text !== undefined) {
+          let dre;
+          try { dre = new RegExp(del[1]); } catch { return err("sed: -e expression #1: invalid regular expression"); }
+          e.writeFile(p, e.host[p].text.split("\n").filter((l) => !dre.test(l)).join("\n"));
+          return ok([]);
+        }
         if (!m) return err(`sed: -e expression #1, char ${String(expr || "").length}: unterminated \`s' command`);
         if (!e.host[p] || e.host[p].text === undefined) return err(`sed: can't read ${file}: No such file or directory`);
         let re;
         try { re = new RegExp(m[2].replace(/\\\//g, "/"), m[4] ? "g" : ""); } catch { return err(`sed: -e expression #1: invalid regular expression`); }
-        e.writeFile(p, e.host[p].text.split("\n").map((l) => l.replace(re, m[3].replace(/\\\//g, "/").replace(/&/g, "$&"))).join("\n"));
+        e.writeFile(p, e.host[p].text.split("\n").map((l) => l.replace(re, m[3].replace(/\\\//g, "/").replace(/\\n/g, "\n").replace(/&/g, "$&"))).join("\n"));
         return ok([]);
       }
       case "grep": {
@@ -1885,9 +2510,10 @@
         }
         return { code: lines.length ? 0 : 1, lines: lines.map((l) => [l, ""]) };
       }
+      case "docker-compose": return err("Command 'docker-compose' not found, but can be installed with:\n\nsudo snap install docker\n\nCompose v2 is part of Docker: use docker compose (with a space).");
       case "node": case "npm": case "npx": case "yarn":
         return err(`Command '${cmd}' not found, but can be installed with:\n\nsudo apt install ${cmd === "npx" ? "npm" : cmd === "yarn" ? "yarnpkg" : cmd}`);
-      case "apt": case "apt-get": case "snap": case "systemctl": case "service":
+      case "apt": case "apt-get": case "snap":
         return LAB(cmd);
       case "vi": case "vim": case "nano": case "code":
         return na("Edit files in the editor beside the terminal, or with echo, printf and sed -i.");
@@ -1914,8 +2540,8 @@
 
   // Run one line: commands joined by && || ; with pipes and > redirects.
   function shell(e, line) {
-    const expanded = String(line).replace(/\$\(pwd\)|\$\{?PWD\}?/g, e.cwd).replace(/\$\{?HOME\}?/g, HOME).replace(/(^|\s)~(?=\/|\s|$)/g, `$1${HOME}`);
-    const toks = lex(expanded);
+    const expanded = String(line).replace(/\$\(pwd\)/g, e.cwd).replace(/(^|\s)~(?=\/|\s|$)/g, `$1${HOME}`);
+    const toks = lex(expanded, { ...e.env, HOME, PWD: e.cwd, USER: "dev" });
     if (!toks) return [["bash: unexpected EOF while looking for matching quote", "warn"]];
     const out = [];
     let i = 0, last = 0, skip = false;
@@ -1935,8 +2561,9 @@
         }
         let r = runOne(e, pipes[0]);
         for (const pipe of pipes.slice(1)) {
+          if (pipe[0] === "docker") { r = runOne(e, pipe, r.lines.map((l) => l[0]).join("\n")); continue; }
           const lines = filterLines(r.lines, pipe);
-          r = lines ? { code: pipe[0] === "grep" && !lines.length ? 1 : 0, lines } : { code: 1, lines: [[`The playground pipes into grep, head, tail, sort and wc.`, "na"]] };
+          r = lines ? { code: pipe[0] === "grep" && !lines.length ? 1 : 0, lines } : { code: 1, lines: [[`The playground pipes into grep, head, tail, sort, wc and docker login.`, "na"]] };
         }
         if (redirect) {
           if (!redirect.file) r = { code: 2, lines: [["bash: syntax error near unexpected token `newline'", "warn"]] };
@@ -1964,14 +2591,24 @@
     return out;
   }
 
-  function runOne(e, w) {
+  function runOne(e, w, stdin) {
     if (!w.length) return ok([]);
     e.tick(1000);
+    // A restart policy tries again a few seconds after each exit.
+    for (const c of e.containers) if (c.state === "restarting" && e.now - c.finishedAt >= 5000) e.start(c);
     let [cmd, ...a] = w;
     let sudo = false;
     if (cmd === "sudo") { sudo = true; [cmd, ...a] = a; if (!cmd) return fail("usage: sudo command"); }
     try {
-      if (cmd === "docker") return docker(e, a);
+      if (cmd === "docker") {
+        const local = !a.length || /^(--version|-v|help|--help|login|logout)$/.test(a[0]);
+        if (!local && !e.daemon.up) return fail(`${a[0] === "run" ? "docker: " : ""}Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?`);
+        const sock = e.host["/var/run/docker.sock"];
+        if (!local && !sudo && !e.groups.includes("docker") && !(sock.mode & 0o006)) {
+          return fail(`${a[0] === "run" ? "docker: " : ""}permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Get "http://%2Fvar%2Frun%2Fdocker.sock/v1.48/${a[0] === "images" ? "images" : "containers"}/json": dial unix /var/run/docker.sock: connect: permission denied`);
+        }
+        return docker(e, a, stdin);
+      }
     } catch (err) {
       if (/^template:/.test(err.message)) return fail(err.message);
       throw err;
@@ -1987,7 +2624,7 @@
   const project = (dir, files) => Object.fromEntries([[dir, D(1000)], ...Object.entries(files).map(([k, v]) => [`${dir}/${k}`, v])]);
   const pkg = (name, deps, dev, size) => file(`{\n  "name": "${name}",\n  "version": "1.0.0",\n  "dependencies": { ${deps.map((d) => `"${d}": "^4.0.0"`).join(", ")} },\n  "devDependencies": { ${dev.map((d) => `"${d}": "^9.0.0"`).join(", ")} }\n}\n`, { deps: size });
   const NODE_IGNORE = "node_modules\n.git\n.env\nlogs\n";
-  const nodeDockerfile = (script, user, port) => `FROM node:22-alpine\n${user === "app" ? "RUN addgroup -S -g 10001 app && adduser -S -u 10001 -G app app\n" : ""}WORKDIR /app\nCOPY package*.json ./\nRUN npm ci --omit=dev\nCOPY . .\nUSER ${user}\nEXPOSE ${port}\nCMD ["node", "${script}"]\n`;
+  const nodeDockerfile = (script, user, port) => `FROM node:22-alpine\n${user === "app" ? "RUN addgroup -S -g 10001 app && adduser -S -u 10001 -G app app\n" : ""}WORKDIR /app\nCOPY package*.json ./\nRUN npm ci --omit=dev\nCOPY . .\nUSER ${user}\n${port ? `EXPOSE ${port}\n` : ""}CMD ["node", "${script}"]\n`;
   const service = (dir, script, app, user, port, deps) => project(dir, {
     Dockerfile: file(nodeDockerfile(script, user, port)), ".dockerignore": file(NODE_IGNORE),
     "package.json": pkg(app, deps, ["eslint"], { all: 31 * MB, prod: 9.4 * MB, count: [188, 42] }), "package-lock.json": blob(24 * kB),
@@ -2179,7 +2816,628 @@
       tries: ["docker ps -a", "docker logs report", "docker inspect report --format '{{.State.OOMKilled}}'"]
     }
   ];
-  const GROUPS = [["Basics", ["exits", "port"]], ["Networking", ["dns"]], ["Storage", ["volmask", "perms"]], ["Images and builds", ["cache", "bigimage"]], ["Production", ["oom"]]];
+  const siteFiles = project(`${HOME}/site`, { Dockerfile: file("FROM nginx:1.27\nCOPY index.html /usr/share/nginx/html/\n"), "index.html": file("<h1>Kitchen menu v1.0</h1>\n") });
+  const siteBuilds = [`cd ${HOME}/site`, "docker build -t quest/site:1.0 .", (e) => e.writeFile(`${HOME}/site/index.html`, "<h1>Kitchen menu v1.1</h1>\n"), "docker build -t quest/site:1.1 .", `cd ${HOME}`];
+  const serves = (e, port, text) => { const r = e.http(null, `localhost:${port}`); return r.code === 0 && r.text.includes(text); };
+  const answer = (e, port) => { const r = e.http(null, `localhost:${port}`); return r.code === 0 ? r.text.split("\n").find((l) => /<h1>|: ok/.test(l)) || "answers" : r.text.replace(/^curl: \(\d+\) /, ""); };
+  const named = (e, name) => e.containers.find((c) => c.name === name);
+  const viaDns = (e, name) => { const c = named(e, name); return Boolean(c && c.state === "running" && c.proc.via === "dns"); };
+  const linkText = (e, name) => { const c = named(e, name); return !c ? `no ${name} container` : c.state !== "running" ? statusOf(e, c) : c.proc.via === "dns" ? "by name, over DNS" : c.proc.via === "link" ? "through a legacy --link" : "by IP address"; };
+  const forget = (dir) => (e) => { for (const p of Object.keys(e.host)) if (inside(p, dir)) delete e.host[p]; };
+  const runningOf = (e, repo) => byImage(e, repo).filter((c) => c.state === "running");
+  const ORDERS_COMPOSE = (dbHost, deps, healthcheck) => `services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: ${dbHost}
+      DB_PASSWORD: \${DB_PASSWORD}
+    depends_on:
+${deps}
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: \${DB_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+${healthcheck ? `    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      retries: 10
+` : ""}volumes:
+  db-data:
+`;
+  const HEALTHY_DEP = "      db:\n        condition: service_healthy";
+  const ordersFiles = (composeText, withEnv) => ({
+    ...service(`${HOME}/orders`, "orders.js", "orders", "node", 8080, ["pg"]),
+    [`${HOME}/orders/compose.yaml`]: file(composeText),
+    ...(withEnv ? { [`${HOME}/orders/.env`]: file("DB_PASSWORD=kitchen-practice\n") } : {})
+  });
+  const HEALTH_DOCKERFILE = 'FROM node:22-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci --omit=dev\nCOPY . .\nEXPOSE 3000\nHEALTHCHECK --interval=30s --timeout=3s CMD curl -f http://localhost:3000/ || exit 1\nCMD ["node", "server.js"]\n';
+  const PAY_DOCKERFILE = 'FROM node:22-alpine\nWORKDIR /app\nCOPY package*.json .npmrc ./\nRUN npm ci --omit=dev && rm -f .npmrc\nCOPY server.js ./\nUSER node\nCMD ["node", "server.js"]\n';
+  const payFiles = project(`${HOME}/payments`, {
+    Dockerfile: file(PAY_DOCKERFILE), ".dockerignore": file("node_modules\n.git\n"),
+    "package.json": file('{\n  "name": "payments",\n  "private": true,\n  "dependencies": { "@kitchen/payments": "^3.1.0", "express": "^4.21.1" }\n}\n', { private: true, deps: { all: 40 * MB, prod: 31 * MB, count: [120, 88] } }),
+    "package-lock.json": blob(41 * kB), "server.js": file('const pay = require("@kitchen/payments");\nrequire("express")().use(pay.routes()).listen(3000);\n', { app: "payments" }),
+    ".npmrc": file("@kitchen:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=practice-token-not-real\n", { mode: 0o600 })
+  });
+  const leaks = (e, img) => img.layers.some((l) => (l.files || []).some((p) => /\.npmrc$/.test(p)) || l.by.includes("practice-token-not-real")) || img.config.Env.some((x) => x.includes("practice-token"));
+  const newestOf = (e, repo) => Object.values(e.images).filter((i) => i.built && e.tagsOf(i).some((t) => t.startsWith(repo + ":"))).sort((a, b) => b.created - a.created)[0];
+  const webFiles = project(`${HOME}/web`, {
+    Dockerfile: file("FROM nginx:1.27\nCOPY dist/ /usr/share/nginx/html/\nEXPOSE 80\n"), ".dockerignore": file("node_modules\n.git\ndist\n"),
+    "package.json": file('{\n  "name": "web",\n  "scripts": { "build": "vite build" }\n}\n'), src: dirBlob(240 * kB), dist: D(1000),
+    "dist/index.html": file("<!doctype html>\n<h1>Kitchen web</h1>\n"), "dist/assets": dirBlob(380 * kB)
+  });
+  // Old images and build cache that fill the disk, for the disk-full scenario.
+  function clutter(e) {
+    for (let i = 0; i < 9; i++) {
+      const id = hexOf(`dangling${i}`);
+      e.images[id] = { id, created: e.now - (i + 2) * 86400e3, layers: [{ id: hexOf(`dl${i}`), size: 1.2 * GB, by: "COPY . . # buildkit", created: e.now }], fs: {}, users: { root: [0, 0] }, bins: new Set(), os: "debian", arch: "amd64", config: { Env: [], Cmd: null, Entrypoint: null, WorkingDir: "", User: "", ExposedPorts: [], Volumes: [], Healthcheck: null } };
+    }
+    for (let i = 0; i < 40; i++) e.cache.set(hexOf(`old-cache${i}`), { fs: {}, users: {}, groups: {}, bins: [], layer: { id: hexOf(`oc${i}`), size: 350 * MB } });
+    e.volume("pgdata", false).fs["/PG_VERSION"] = { size: 2.1 * GB };
+    e.writeFile(`${HOME}/shop/server.js`, SHOP_SERVER + "// new checkout page\n");
+    e.capacity = e.diskUsed() + 1e6;
+  }
+
+  const MORE = [
+    {
+      id: "typo", title: "pull access denied", level: "01",
+      story: "The deploy script ran docker run -d --name web -p 8080:80 ngnix:1.27 and stopped with an error. Nothing is serving the site.",
+      goal: "Get nginx answering on localhost:8080.",
+      done: "nginx answers on localhost:8080.",
+      setup: ["docker run -d --name web -p 8080:80 ngnix:1.27", 2],
+      won: (e) => serves(e, 8080, "Welcome to nginx"),
+      check: (e) => ({ label: "curl localhost:8080", text: answer(e, 8080) }),
+      hints: [
+        "docker ps -a has no web container at all: it was never created. Run the deploy command again and read the first lines.",
+        "pull access denied for ngnix, repository does not exist. Docker Hub answers a typo and a private repository the same way, so check the spelling before you log in.",
+        "The image is nginx, not ngnix: docker run -d --name web -p 8080:80 nginx:1.27"
+      ],
+      lesson: "Unable to find image locally, then pull access denied, nearly always means a typo in the name or tag. Logging in only helps for private repositories.",
+      tries: ["docker ps -a", "docker run -d --name web -p 8080:80 ngnix:1.27", "docker images"]
+    },
+    {
+      id: "conflict", title: "Name already in use", level: "00",
+      story: "Version 1.1 of the menu site was built. The deploy step tried to start it as web and failed; the stopped 1.0 container is still there.",
+      goal: "Run quest/site:1.1 as the container named web, answering on localhost:8080.",
+      done: "web runs version 1.1.",
+      files: siteFiles,
+      setup: [...siteBuilds, 60, "docker run -d --name web -p 8080:80 quest/site:1.0", 600, "docker stop web", 5, "docker run -d --name web -p 8080:80 quest/site:1.1", 1],
+      won: (e) => { const c = named(e, "web"); return Boolean(c && c.state === "running" && c.image === "quest/site:1.1" && serves(e, 8080, "v1.1")); },
+      check: (e) => ({ label: "curl localhost:8080", text: answer(e, 8080) }),
+      hints: [
+        "Run the deploy command again: docker run -d --name web -p 8080:80 quest/site:1.1. What does the error say?",
+        "A stopped container keeps its name. docker ps -a shows web, Exited, still from quest/site:1.0. docker start web would bring back the old version.",
+        "Remove the old one (or rename it to keep it), then run the new one: docker rm web && docker run -d --name web -p 8080:80 quest/site:1.1"
+      ],
+      lesson: "Stopped containers keep their names until removed. Deploy scripts remove (or rename) the old container before starting the new one, or use --rm.",
+      tries: ["docker ps -a", "docker run -d --name web -p 8080:80 quest/site:1.1", "docker images quest/site"]
+    },
+    {
+      id: "exit127", title: "Executable not found", level: "03",
+      story: "A teammate rewrote the shop's Dockerfile. The new image builds, but docker run fails before the app prints anything.",
+      goal: "Get the shop answering on localhost:3000.",
+      done: "The shop answers on localhost:3000.",
+      edit: ["Dockerfile"], editDir: `${HOME}/shop`,
+      files: shopFiles(DEV_DOCKERFILE.replace('CMD ["node", "server.js"]', 'ENTRYPOINT ["nodejs", "server.js"]'), NODE_IGNORE, false),
+      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", 20, "docker run -d --name shop -p 3000:3000 quest/shop:1.0", 1],
+      won: (e) => runningOf(e, "quest/shop").length > 0 && serves(e, 3000, "shop: ok"),
+      check: (e) => ({ label: "curl localhost:3000", text: answer(e, 3000) }),
+      hints: [
+        "docker ps -a: shop is Created, never started. docker start shop prints the same error. Read it to the end.",
+        "exec: \"nodejs\": executable file not found in $PATH. The node image calls its program node, not nodejs: docker run --rm --entrypoint ls quest/shop:1.0 /usr/local/bin",
+        "Fix ENTRYPOINT in the Dockerfile to [\"node\", \"server.js\"], rebuild and re-create: docker build -t quest/shop:1.1 . && docker rm shop && docker run -d --name shop -p 3000:3000 quest/shop:1.1"
+      ],
+      lesson: "Exit code 127 and executable file not found mean the command does not exist in the image. Check the binary's name and that the image really contains it.",
+      tries: ["docker ps -a", "docker start shop", "cat Dockerfile"]
+    },
+    {
+      id: "restartloop", title: "Restarting forever", level: "11",
+      story: "The worker was started with --restart always so it would survive reboots. Now docker ps shows it Restarting every few seconds.",
+      goal: "Get worker running and staying up.",
+      done: "worker is running.",
+      files: service(`${HOME}/worker`, "worker.js", "worker", "node", null, ["bullmq"]),
+      setup: [`cd ${HOME}/worker`, "docker build -t quest/worker:1.0 .", `cd ${HOME}`, 30, "docker run -d --name worker --restart always quest/worker:1.0", 3],
+      won: (e) => runningOf(e, "quest/worker").some((c) => c.env.some((x) => /^QUEUE_URL=\S+/.test(x))),
+      check: (e) => { const c = byImage(e, "quest/worker")[0]; return { label: "worker", text: c ? statusOf(e, c) : "no worker container" }; },
+      hints: [
+        "docker ps shows Restarting (1). The restart policy hides the crash; docker logs worker shows what happens on each start.",
+        "QUEUE_URL is not set. Restarting cannot fix missing configuration, and docker update cannot add environment variables.",
+        "Re-create it with the variable: docker rm -f worker && docker run -d --name worker --restart always -e QUEUE_URL=redis://cache:6379 quest/worker:1.0"
+      ],
+      lesson: "A restart policy keeps a healthy service up; it does not fix a broken one. Restarting (1) means read the logs and fix the cause.",
+      tries: ["docker ps", "docker logs worker", "docker inspect worker --format '{{.RestartCount}} {{.HostConfig.RestartPolicy.Name}}'"]
+    },
+    {
+      id: "nologs", title: "No logs to read", level: "13",
+      story: "To save disk, the worker on this server runs with --log-driver none. It exits at once, and nobody can see why.",
+      goal: "Get worker running, with logs you can read.",
+      done: "worker runs, and its logs are readable.",
+      files: service(`${HOME}/worker`, "worker.js", "worker", "node", null, ["bullmq"]),
+      setup: [`cd ${HOME}/worker`, "docker build -t quest/worker:1.0 .", `cd ${HOME}`, 30, "docker run -d --name worker --log-driver none quest/worker:1.0", 2],
+      won: (e) => runningOf(e, "quest/worker").some((c) => c.log.type !== "none" && c.env.some((x) => /^QUEUE_URL=\S+/.test(x))),
+      check: (e) => { const c = byImage(e, "quest/worker")[0]; return { label: "worker", text: c ? `${statusOf(e, c)} · logs: ${c.log.type}` : "no worker container" }; },
+      hints: [
+        "docker logs worker fails: the logging driver none keeps nothing. docker inspect worker --format '{{.HostConfig.LogConfig.Type}}' confirms it.",
+        "Re-create it with the default json-file driver (or --log-driver local, which also rotates) and read what it says.",
+        "The log says QUEUE_URL is not set: docker rm worker && docker run -d --name worker --log-driver local -e QUEUE_URL=redis://cache:6379 quest/worker:1.0"
+      ],
+      lesson: "Without logs you are guessing. Keep a readable driver (json-file or local) and limit its size, instead of turning logging off.",
+      tries: ["docker ps -a", "docker logs worker", "docker inspect worker --format '{{.HostConfig.LogConfig.Type}}'"]
+    },
+    {
+      id: "localhost", title: "localhost is the container", level: "07",
+      story: "api and cache share the app-net network, but api says connection refused on 127.0.0.1:6379. The setting worked on a laptop where Redis ran locally.",
+      goal: "Let api reach cache by its name.",
+      done: "api reaches cache by name.",
+      files: service(`${HOME}/api`, "api.js", "api", "node", 8080, ["ioredis"]),
+      setup: ["docker pull redis:7.4", `cd ${HOME}/api`, "docker build -t quest/api:1.0 .", `cd ${HOME}`, 60, "docker network create app-net", "docker run -d --name cache --network app-net redis:7.4", "docker run -d --name api --network app-net -p 8080:8080 -e REDIS_HOST=localhost quest/api:1.0", 2],
+      won: (e) => viaDns(e, "api"),
+      check: (e) => ({ label: "api → cache:6379", text: linkText(e, "api") }),
+      hints: [
+        "docker logs api: ECONNREFUSED 127.0.0.1:6379. Which machine is 127.0.0.1 from inside a container?",
+        "Each container has its own network namespace, so localhost is the api container itself, where nothing listens on 6379. cache is reachable by its name on app-net.",
+        "Re-create api pointing at the name: docker rm api && docker run -d --name api --network app-net -p 8080:8080 -e REDIS_HOST=cache quest/api:1.0"
+      ],
+      lesson: "Inside a container, localhost means that container. Reach other containers by name on a shared user-defined network.",
+      tries: ["docker logs api", "docker inspect api --format '{{.Config.Env}}'", "docker network inspect app-net"]
+    },
+    {
+      id: "loopback", title: "Listening on 127.0.0.1", level: "06",
+      story: "The shop is Up, its port is published, and its log says it is listening. Yet curl localhost:3000 gets its connection reset.",
+      goal: "Make localhost:3000 reach the shop through its published port.",
+      done: "The shop answers on localhost:3000.",
+      files: shopFiles(DEV_DOCKERFILE, NODE_IGNORE, false),
+      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", `cd ${HOME}`, 30, "docker run -d --name shop -p 3000:3000 -e HOST=127.0.0.1 quest/shop:1.0", 5],
+      won: (e) => serves(e, 3000, "shop: ok") && runningOf(e, "quest/shop").some((c) => c.netMode !== "host"),
+      check: (e) => ({ label: "curl localhost:3000", text: answer(e, 3000) }),
+      hints: [
+        "curl localhost:3000 says Connection reset by peer, so Docker forwards the port but nothing answers behind it. docker logs shop: where does it listen?",
+        "127.0.0.1 inside the container only accepts connections from inside the container (docker exec shop wget -qO- localhost:3000 works). Published ports arrive on the container's own network interface.",
+        "Let the app listen on every interface: docker rm -f shop && docker run -d --name shop -p 3000:3000 -e HOST=0.0.0.0 quest/shop:1.0"
+      ],
+      lesson: "A server in a container must listen on 0.0.0.0. To keep a port private, publish it on the host's loopback instead: -p 127.0.0.1:3000:3000.",
+      tries: ["curl localhost:3000", "docker logs shop", "docker exec shop wget -qO- localhost:3000"]
+    },
+    {
+      id: "portinuse", title: "Port already allocated", level: "06",
+      story: "Version 1.1 of the menu site should replace 1.0 on port 8080. The new container was created but would not start.",
+      goal: "Run quest/site:1.1 as web on localhost:8080.",
+      done: "web serves version 1.1 on 8080.",
+      files: siteFiles,
+      setup: [...siteBuilds, 60, "docker run -d --name web-old -p 8080:80 quest/site:1.0", 120, "docker run -d --name web -p 8080:80 quest/site:1.1", 1],
+      won: (e) => { const c = named(e, "web"); return Boolean(c && c.state === "running" && c.image === "quest/site:1.1" && serves(e, 8080, "v1.1")); },
+      check: (e) => ({ label: "curl localhost:8080", text: answer(e, 8080) }),
+      hints: [
+        "docker start web and read the error: Bind for 0.0.0.0:8080 failed: port is already allocated.",
+        "docker ps --filter publish=8080, or just docker ps: web-old, running 1.0, still holds the port. Only one container can publish a host port.",
+        "Stop the old one, then start the new one: docker stop web-old && docker start web"
+      ],
+      lesson: "A host port belongs to one container at a time. Stop or remove the old container before the new one takes its port.",
+      tries: ["docker ps -a", "docker start web", "curl localhost:8080"]
+    },
+    {
+      id: "isolated", title: "Different networks", level: "07",
+      story: "The networks were split into front (public services) and back (data). Since then api cannot find cache.",
+      goal: "Let api reach cache by name, keeping the front and back networks.",
+      done: "api reaches cache by name.",
+      files: service(`${HOME}/api`, "api.js", "api", "node", 8080, ["ioredis"]),
+      setup: ["docker pull redis:7.4", `cd ${HOME}/api`, "docker build -t quest/api:1.0 .", `cd ${HOME}`, 60, "docker network create front", "docker network create back", "docker run -d --name cache --network back redis:7.4", "docker run -d --name api --network front -p 8080:8080 quest/api:1.0", 2],
+      won: (e) => viaDns(e, "api") && Boolean(e.networks.front && e.networks.back),
+      check: (e) => ({ label: "api → cache:6379", text: linkText(e, "api") }),
+      hints: [
+        "docker logs api: ENOTFOUND cache. Both networks are user-defined, so DNS works. On which network is each container?",
+        "docker network inspect front and back: api is only on front, cache only on back. Names resolve only between containers that share a network.",
+        "Attach api to the back network too, then start it: docker network connect back api && docker start api"
+      ],
+      lesson: "Containers find each other by name only on a network they share. A container can join several networks, which is how a service bridges a front and a back network.",
+      tries: ["docker logs api", "docker network ls", "docker network inspect back"]
+    },
+    {
+      id: "datalost", title: "Data gone after re-create", level: "08",
+      story: "cache was re-created during an upgrade, and all 1,532 keys are gone. Nobody deleted any volume.",
+      goal: "Re-create cache so its data lives in a named volume and survives the next re-create.",
+      done: "cache keeps its data in a named volume.",
+      setup: ["docker pull redis:7.4", "docker run -d --name cache redis:7.4", (e) => { e.volumes[e.container("cache").mounts[0].name].fs["/dump.rdb"] = { size: 18 * MB, keys: 1532 }; }, 4320, "docker rm -f cache", "docker run -d --name cache redis:7.4", 2],
+      won: (e) => e.containers.some((c) => c.state === "running" && c.proc.app === "redis" && c.mounts.some((m) => m.dest === "/data" && (m.type === "bind" || (m.type === "volume" && !m.anon)))),
+      check: (e) => {
+        const c = e.containers.find((x) => x.proc.app === "redis") || e.containers[0];
+        const m = c && c.mounts.find((x) => x.dest === "/data");
+        return { label: "cache /data", text: !m ? "no mount" : m.type === "bind" ? `bind mount ${m.source}` : m.anon ? "anonymous volume, lost on re-create" : `named volume ${m.name}` };
+      },
+      hints: [
+        "docker volume ls lists two volumes with long random names. docker inspect cache --format '{{json .Mounts}}' shows /data on one of them.",
+        "The redis image declares VOLUME /data, so every new container gets a fresh anonymous volume. The old data is still in the other volume, but nothing points at it.",
+        "Use a named volume that outlives containers: docker rm -f cache && docker run -d --name cache -v redis-data:/data redis:7.4 (or mount the old volume by its name to get the keys back)."
+      ],
+      lesson: "A VOLUME in an image only gives each container its own anonymous volume. Name the volume yourself so the next container finds the same data.",
+      tries: ["docker volume ls", "docker exec cache redis-cli dbsize", "docker inspect cache --format '{{json .Mounts}}'"]
+    },
+    {
+      id: "readonly", title: "Read-only file system", level: "15",
+      story: "Security asked for a read-only root file system on every container. nginx now exits at once.",
+      goal: "Run nginx with --read-only, answering on localhost:8080.",
+      done: "nginx runs with a read-only root.",
+      setup: ["docker pull nginx:1.27", "docker run -d --name web --read-only -p 8080:80 nginx:1.27", 2],
+      won: (e) => e.containers.some((c) => c.state === "running" && c.readOnly && c.proc.app === "nginx") && serves(e, 8080, "Welcome to nginx"),
+      check: (e) => ({ label: "curl localhost:8080", text: answer(e, 8080) }),
+      hints: [
+        "docker logs web: nginx cannot create /var/cache/nginx/client_temp. The root file system is read-only, as asked.",
+        "nginx must write to two places: its cache (/var/cache/nginx) and its pid file (/var/run). Give exactly those a writable tmpfs.",
+        "docker rm web && docker run -d --name web --read-only --tmpfs /var/cache/nginx --tmpfs /var/run -p 8080:80 nginx:1.27"
+      ],
+      lesson: "With --read-only, find what the app writes (the logs name it) and give only those paths a tmpfs or a volume.",
+      tries: ["docker ps -a", "docker logs web", "docker inspect web --format '{{.HostConfig.ReadonlyRootfs}}'"]
+    },
+    {
+      id: "capdrop", title: "Capabilities dropped", level: "15",
+      story: "To harden it, web was started with --cap-drop ALL. nginx stopped working.",
+      goal: "Run nginx with --cap-drop ALL, adding back only what it needs.",
+      done: "nginx runs with the fewest capabilities.",
+      setup: ["docker pull nginx:1.27", "docker run -d --name web --cap-drop ALL -p 8080:80 nginx:1.27", 2],
+      won: (e) => serves(e, 8080, "Welcome to nginx") && e.containers.some((c) => c.state === "running" && c.proc.app === "nginx" && !c.privileged && c.capDrop.map(capName).includes("ALL") && c.capAdd.every((x) => ["CHOWN", "SETUID", "SETGID", "NET_BIND_SERVICE", "DAC_OVERRIDE"].includes(capName(x)))),
+      check: (e) => ({ label: "curl localhost:8080", text: answer(e, 8080) }),
+      hints: [
+        "docker logs web: chown(...) failed (1: Operation not permitted). The nginx master runs as root, but root without capabilities cannot change file owners.",
+        "nginx needs CHOWN for its cache folders, and SETUID and SETGID to start its workers as the nginx user. Port 80 needs nothing extra on current Docker.",
+        "docker rm web && docker run -d --name web --cap-drop ALL --cap-add CHOWN --cap-add SETUID --cap-add SETGID -p 8080:80 nginx:1.27"
+      ],
+      lesson: "Drop every capability, then add back only the ones the logs ask for. --privileged is the opposite: every capability and every device.",
+      tries: ["docker logs web", "docker inspect web --format '{{.HostConfig.CapDrop}} {{.HostConfig.CapAdd}}'", "curl localhost:8080"]
+    },
+    {
+      id: "secretlayer", title: "Token in a layer", level: "15",
+      story: "A scan found an npm token inside quest/payments:1.0, although the Dockerfile deletes .npmrc right after npm ci.",
+      goal: "Build quest/payments with no token in any layer or in its history, and still working.",
+      done: "The image builds and runs, and no layer holds the token.",
+      edit: ["Dockerfile", ".dockerignore"], editDir: `${HOME}/payments`, focus: "quest/payments",
+      files: payFiles,
+      setup: [`cd ${HOME}/payments`, "docker build -t quest/payments:1.0 .", 300],
+      won: (e) => { const img = newestOf(e, "quest/payments"); return Boolean(img && !leaks(e, img) && e.trial(img).ok); },
+      check: (e) => { const img = newestOf(e, "quest/payments") || e.image("quest/payments:1.0"); return { label: `${e.tagsOf(img)[0]}`, text: leaks(e, img) ? "token found in a layer" : e.trial(img).ok ? "clean, and it runs" : "clean, but it does not start" }; },
+      hints: [
+        "docker history quest/payments:1.0: the COPY that includes .npmrc is its own layer. The rm in the next step hides the file but cannot change that layer.",
+        "Build arguments are no better: docker history shows their values. BuildKit secrets mount a file for one RUN step only, and never store it.",
+        "In the Dockerfile: COPY package*.json ./ then RUN --mount=type=secret,id=npmrc,target=/root/.npmrc npm ci --omit=dev. Then: docker build --secret id=npmrc,src=.npmrc -t quest/payments:1.1 ."
+      ],
+      lesson: "Anything copied, written or passed as ARG ends up in the image or its history. Use --mount=type=secret for credentials needed at build time.",
+      tries: ["docker history quest/payments:1.0", "cat Dockerfile", "docker run --rm quest/payments:1.0 ls -a /app"]
+    },
+    {
+      id: "copymissing", title: "COPY: not found", level: "03",
+      story: "The front end was built into dist/ as usual, but docker build fails on the COPY of dist since someone tidied the .dockerignore.",
+      goal: "Build quest/web with the site from dist/ in it.",
+      done: "quest/web builds and serves the site.",
+      edit: [".dockerignore", "Dockerfile"], editDir: `${HOME}/web`,
+      files: webFiles,
+      setup: [`cd ${HOME}/web`],
+      won: (e) => { const img = newestOf(e, "quest/web"); const f = img && img.fs["/usr/share/nginx/html/index.html"]; return Boolean(f && /Kitchen web/.test(f.text || "")); },
+      check: (e) => { const img = newestOf(e, "quest/web"); return { label: "quest/web", text: !img ? "not built" : (img.fs["/usr/share/nginx/html/index.html"] || {}).text ? "built with the site" : "built, but no index.html" }; },
+      hints: [
+        "Run docker build -t quest/web:1.0 . and read the error: \"/dist\": not found. Yet ls shows dist right there.",
+        "The build only sees the context Docker sends, and .dockerignore decides what that is. cat .dockerignore: dist is excluded.",
+        "Remove the dist line from .dockerignore (in the editor, or sed -i '/^dist$/d' .dockerignore), then docker build -t quest/web:1.0 ."
+      ],
+      lesson: "\"not found\" in COPY means the file is missing from the build context, not from your disk. Check .dockerignore and the folder you build from.",
+      tries: ["docker build -t quest/web:1.0 .", "cat .dockerignore", "ls dist"]
+    },
+    {
+      id: "platform", title: "exec format error", level: "14",
+      story: "quest/shop:2.0 was built on a laptop with an Arm chip and copied to the amd64 server. It exits the moment it starts.",
+      goal: "Get the shop answering on localhost:3000 on this server.",
+      done: "An amd64 build runs on the server.",
+      files: shopFiles(DEV_DOCKERFILE, NODE_IGNORE, false),
+      setup: [`cd ${HOME}/shop`, "docker build --platform linux/arm64 -t quest/shop:2.0 .", 60, "docker run -d --name shop -p 3000:3000 quest/shop:2.0", 1],
+      won: (e) => serves(e, 3000, "shop: ok"),
+      check: (e) => ({ label: "curl localhost:3000", text: answer(e, 3000) }),
+      hints: [
+        "docker logs shop: exec format error. docker run also printed a warning about the platform.",
+        "docker image inspect quest/shop:2.0 --format '{{.Architecture}}' says arm64; this server is amd64. Asking docker run for --platform linux/amd64 cannot convert it.",
+        "Build for the server's platform, then re-create: docker build --platform linux/amd64 -t quest/shop:2.0 . && docker rm shop && docker run -d --name shop -p 3000:3000 quest/shop:2.0"
+      ],
+      lesson: "Images are built for one CPU architecture unless you build for several. Build with --platform for where it runs, or publish a multi-platform image with buildx.",
+      tries: ["docker logs shop", "docker image inspect quest/shop:2.0 --format '{{.Architecture}}'", "docker info"]
+    },
+    {
+      id: "auth", title: "Private registry", level: "14",
+      story: "The new server must run ghcr.io/kitchen/shop:2.1 from the team's private registry. The pull fails. A read-only token is in $GHCR_TOKEN.",
+      goal: "Run ghcr.io/kitchen/shop:2.1 on localhost:3000.",
+      done: "The private image runs.",
+      files: shopFiles(DEV_DOCKERFILE, NODE_IGNORE, false),
+      setup: [`cd ${HOME}/shop`, "docker build -t ghcr.io/kitchen/shop:2.1 .", (e) => e.publish("ghcr.io/kitchen/shop:2.1", true), forget(`${HOME}/shop`), (e) => { e.env.GHCR_TOKEN = "practice-token-not-real"; }, `cd ${HOME}`, 10, "docker run -d --name shop -p 3000:3000 ghcr.io/kitchen/shop:2.1", 1],
+      won: (e) => serves(e, 3000, "shop: ok") && runningOf(e, "ghcr.io/kitchen/shop").length > 0,
+      check: (e) => ({ label: "curl localhost:3000", text: answer(e, 3000) }),
+      hints: [
+        "docker pull ghcr.io/kitchen/shop:2.1 and read the error: unauthorized. The registry wants to know who you are.",
+        "docker login with no server logs in to Docker Hub, not ghcr.io. Name the registry, and pipe the token in so it never appears in your shell history or in ps.",
+        "echo $GHCR_TOKEN | docker login ghcr.io -u kitchen-ci --password-stdin && docker run -d --name shop -p 3000:3000 ghcr.io/kitchen/shop:2.1"
+      ],
+      lesson: "Credentials are per registry. Log in to the registry the image names, with --password-stdin, using a token limited to pulling.",
+      tries: ["docker pull ghcr.io/kitchen/shop:2.1", "echo $GHCR_TOKEN | wc -l", "docker images"]
+    },
+    {
+      id: "ratelimit", title: "toomanyrequests", level: "14",
+      story: "Every CI job on this shared runner pulls nginx anonymously from Docker Hub. Today the pull fails. The team's Docker Hub token is in $DOCKERHUB_TOKEN.",
+      goal: "Get nginx:1.27 running on localhost:8080.",
+      done: "nginx was pulled as an authenticated user and runs.",
+      hubLimit: true,
+      setup: [(e) => { e.env.DOCKERHUB_TOKEN = "practice-token-not-real"; }, "docker run -d --name web -p 8080:80 nginx:1.27", 1],
+      won: (e) => serves(e, 8080, "Welcome to nginx"),
+      check: (e) => ({ label: "curl localhost:8080", text: answer(e, 8080) }),
+      hints: [
+        "docker pull nginx:1.27: toomanyrequests. Retrying from the same address hits the same limit.",
+        "Docker Hub limits anonymous pulls per IP address; a shared runner uses them up fast. Pulls by a logged-in account have their own, higher allowance.",
+        "echo $DOCKERHUB_TOKEN | docker login -u kitchenci --password-stdin && docker run -d --name web -p 8080:80 nginx:1.27"
+      ],
+      lesson: "toomanyrequests is Docker Hub's rate limit. Authenticate your pulls, cache images in your own registry or mirror, and pull only when the image changes.",
+      tries: ["docker pull nginx:1.27", "docker images", "env"]
+    },
+    {
+      id: "stale", title: "Old image, new tag", level: "01",
+      story: "The team pushed kitchen/shop:latest with version 2.4 an hour ago. You re-created the shop container, and it still says 2.3.",
+      goal: "Run version 2.4 of kitchen/shop on localhost:3000.",
+      done: "The shop runs version 2.4.",
+      files: shopFiles(DEV_DOCKERFILE.replace("EXPOSE 3000", "ENV APP_VERSION=2.4\nEXPOSE 3000"), NODE_IGNORE, false),
+      setup: [`cd ${HOME}/shop`, "docker build -t kitchen/shop:latest .", (e) => e.publish("kitchen/shop:latest", false), "sed -i 's/APP_VERSION=2.4/APP_VERSION=2.3/' Dockerfile",
+        "docker build -t kitchen/shop:latest .", forget(`${HOME}/shop`), `cd ${HOME}`, 60, "docker run -d --name shop -p 3000:3000 kitchen/shop:latest", 1],
+      won: (e) => serves(e, 3000, "version 2.4"),
+      check: (e) => ({ label: "curl localhost:3000", text: answer(e, 3000) }),
+      hints: [
+        "curl localhost:3000 says version 2.3. docker images kitchen/shop shows when your local latest was made.",
+        "docker run uses the local image when one has that tag; it never checks the registry for a newer latest. Re-creating the container reuses the same old image.",
+        "Pull, then re-create: docker pull kitchen/shop:latest && docker rm -f shop && docker run -d --name shop -p 3000:3000 kitchen/shop:latest (or docker run --pull always)."
+      ],
+      lesson: "A tag is a pointer that moves, and your machine keeps the old target until you pull. Deploy by version tag or digest, and pull explicitly.",
+      tries: ["curl localhost:3000", "docker images kitchen/shop", "docker pull kitchen/shop:latest"]
+    },
+    {
+      id: "logs", title: "Logs fill the disk", level: "13",
+      story: "The server's disk is almost full. The chatty service logs every request, and has been running for three days.",
+      goal: "Re-create chatty with log rotation, so its logs can never fill the disk again.",
+      done: "chatty's logs rotate.",
+      files: service(`${HOME}/chatty`, "chatty.js", "chatty", "node", 8080, ["express"]),
+      setup: [`cd ${HOME}/chatty`, "docker build -t quest/chatty:1.0 .", `cd ${HOME}`, 30, "docker run -d --name chatty -p 8080:8080 quest/chatty:1.0", (e) => { e.container("chatty").logBytes = 14.2 * GB; e.capacity = 24 * 1024 * MiB; }, 4320],
+      won: (e) => runningOf(e, "quest/chatty").some((c) => c.log.type === "local" || (c.log.type === "json-file" && c.log.opts["max-size"])) && e.diskUsed() < 0.8 * e.capacity,
+      check: (e) => { const c = byImage(e, "quest/chatty")[0]; return { label: "disk", text: `${Math.round(e.diskUsed() / e.capacity * 100)}% used${c ? ` · chatty log ${human(c.logBytes)}${c.log.opts["max-size"] || c.log.type === "local" ? ", rotated" : ""}` : ""}` }; },
+      hints: [
+        "df -h shows the disk almost full, but docker system df shows little in images and volumes. Container logs are not counted there.",
+        "docker inspect chatty --format '{{.LogPath}}', then sudo du -sh on that path: the json-file log has no size limit by default. Truncating it frees the space only until it grows back.",
+        "Re-create chatty with rotation (removing the old container deletes its log): docker rm -f chatty && docker run -d --name chatty -p 8080:8080 --log-opt max-size=10m --log-opt max-file=3 quest/chatty:1.0"
+      ],
+      lesson: "The default json-file log grows forever. Set max-size and max-file per container, or the local driver, or make them the default in /etc/docker/daemon.json.",
+      tries: ["df -h", "docker system df", "docker inspect chatty --format '{{.LogPath}}'"]
+    },
+    {
+      id: "diskfull", title: "No space left on device", level: "16",
+      story: "The build server cannot build the shop any more: the disk is full. The pgdata volume holds the reporting database, which is stopped for maintenance.",
+      goal: "Free space and build quest/shop:1.1, without losing the pgdata volume.",
+      done: "The build works, and pgdata is safe.",
+      files: shopFiles('FROM node:22-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci --omit=dev\nCOPY . .\nEXPOSE 3000\nCMD ["node", "server.js"]\n', NODE_IGNORE, true),
+      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", 1440, clutter],
+      won: (e) => Boolean(e.image("quest/shop:1.1") && e.image("quest/shop:1.1").built && e.volumes.pgdata),
+      check: (e) => ({ label: "disk", text: `${Math.min(100, Math.round(e.diskUsed() / e.capacity * 100))}% used${e.volumes.pgdata ? "" : " · pgdata deleted"}` }),
+      hints: [
+        "docker build -t quest/shop:1.1 . fails with no space left on device. df -h agrees. Where is the space going? docker system df",
+        "Most of it is reclaimable: dangling images from old builds and the build cache. The volume is not in use right now, which is exactly why a volume prune would delete it.",
+        "Remove what can be rebuilt, not what cannot: docker builder prune -f && docker image prune -f, then docker build -t quest/shop:1.1 ."
+      ],
+      lesson: "Measure with docker system df, then prune the build cache and dangling images. Volumes hold data that cannot be rebuilt: never prune them blindly.",
+      tries: ["docker build -t quest/shop:1.1 .", "df -h", "docker system df"]
+    },
+    {
+      id: "healthcheck", title: "Unhealthy", level: "11",
+      story: "The shop answers every request, but docker ps says (unhealthy), and the load balancer took it out of rotation.",
+      goal: "Make the shop report healthy, with a check that really tests the app.",
+      done: "The shop is healthy.",
+      edit: ["Dockerfile"], editDir: `${HOME}/shop`,
+      files: shopFiles(HEALTH_DOCKERFILE, NODE_IGNORE, false),
+      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", 20, "docker run -d --name shop -p 3000:3000 quest/shop:1.0", 10],
+      won: (e) => runningOf(e, "quest/shop").some((c) => { const hc = e.health(c); const test = (c.health || e.images[c.imageId].config.Healthcheck || []).join(" "); return hc && hc.status === "healthy" && /localhost:3000|127\.0\.0\.1:3000/.test(test); }),
+      check: (e) => { const c = runningOf(e, "quest/shop")[0]; const hc = c && e.health(c); return { label: "shop health", text: !c ? "not running" : !hc ? "no healthcheck" : hc.status }; },
+      hints: [
+        "docker inspect shop --format '{{json .State.Health}}' shows the check's own output.",
+        "/bin/sh: curl: not found. The image is based on alpine, which has wget but no curl, so the check fails while the app is fine.",
+        "Use wget in the Dockerfile's HEALTHCHECK: CMD wget -qO- http://localhost:3000/ || exit 1. Then docker build -t quest/shop:1.1 . && docker rm -f shop && docker run -d --name shop -p 3000:3000 quest/shop:1.1"
+      ],
+      lesson: "A healthcheck runs inside the container, with that image's tools. Test it with docker exec first, and check the app itself, not a command that always succeeds.",
+      tries: ["docker ps", "docker inspect shop --format '{{json .State.Health}}'", "docker exec shop wget -qO- http://localhost:3000/"]
+    },
+    {
+      id: "composedns", title: "Compose: wrong host", level: "10",
+      story: "The orders stack runs with docker compose. The api service keeps exiting with connection refused on 127.0.0.1:5432.",
+      goal: "Let api reach the db service by its name.",
+      done: "api reaches db by name.",
+      edit: ["compose.yaml"], editDir: `${HOME}/orders`,
+      files: ordersFiles(ORDERS_COMPOSE("localhost", HEALTHY_DEP, true), true),
+      setup: [`cd ${HOME}/orders`, "docker compose up -d", 2],
+      won: (e) => viaDns(e, "orders-api-1"),
+      check: (e) => ({ label: "api → db:5432", text: linkText(e, "orders-api-1") }),
+      hints: [
+        "docker compose ps -a, then docker compose logs api: ECONNREFUSED 127.0.0.1:5432.",
+        "Compose puts both services on the orders_default network, where each service name is a hostname. DB_HOST: localhost points api at itself.",
+        "In compose.yaml set DB_HOST: db, then docker compose up -d (Compose re-creates only what changed)."
+      ],
+      lesson: "In Compose, services reach each other by service name. localhost is always the container itself.",
+      tries: ["docker compose ps -a", "docker compose logs api", "cat compose.yaml"]
+    },
+    {
+      id: "composeorder", title: "Compose: started too early", level: "11",
+      story: "After every reboot the api service of the orders stack exits: the database is not ready yet. Someone restarts it by hand each time.",
+      goal: "Make docker compose up start api only once db is ready.",
+      done: "api waits for a healthy db.",
+      edit: ["compose.yaml"], editDir: `${HOME}/orders`,
+      files: ordersFiles(ORDERS_COMPOSE("db", "      - db", false), true),
+      setup: [`cd ${HOME}/orders`, "docker compose up -d", 2],
+      won: (e) => { const c = named(e, "orders-api-1"); return Boolean(c && c.state === "running" && c.compose.waited); },
+      check: (e) => { const c = named(e, "orders-api-1"); return { label: "api", text: !c ? "not created" : c.state !== "running" ? statusOf(e, c) : c.compose.waited ? "started after db was healthy" : "running, but only by luck of timing" }; },
+      hints: [
+        "docker compose logs api: ECONNREFUSED on db's address. docker compose restart api works now, but only because db has finished starting in the meantime.",
+        "depends_on alone waits for db's container to start, not for PostgreSQL to accept connections. Compose can wait for healthy, if db has a healthcheck.",
+        "In compose.yaml give db a healthcheck (test: [\"CMD\", \"pg_isready\", \"-U\", \"postgres\"]) and change api's depends_on to db: condition: service_healthy. Then docker compose up -d"
+      ],
+      lesson: "depends_on orders container starts. Add a healthcheck and condition: service_healthy to wait for readiness, and still let apps retry their connections.",
+      tries: ["docker compose ps -a", "docker compose logs api", "cat compose.yaml"]
+    },
+    {
+      id: "composeenv", title: "Compose: variable not set", level: "10",
+      story: "A fresh checkout of the orders stack on a new machine. docker compose up prints a warning and the db service exits.",
+      goal: "Get the whole stack running, without writing the password into compose.yaml.",
+      done: "db and api are running.",
+      edit: ["compose.yaml"], editDir: `${HOME}/orders`,
+      files: ordersFiles(ORDERS_COMPOSE("db", HEALTHY_DEP, true), false),
+      setup: [`cd ${HOME}/orders`, "docker compose up -d", 2],
+      won: (e) => { const api = named(e, "orders-api-1"); const db = named(e, "orders-db-1"); const f = e.host[`${HOME}/orders/compose.yaml`]; return Boolean(api && db && api.state === "running" && db.state === "running" && f && /POSTGRES_PASSWORD:\s*\$\{/.test(f.text || "")); },
+      check: (e) => { const db = named(e, "orders-db-1"); return { label: "db", text: db ? statusOf(e, db) : "not created" }; },
+      hints: [
+        "Read the first line of docker compose up -d: the DB_PASSWORD variable is not set. docker compose logs db says why that matters.",
+        "Compose fills ${DB_PASSWORD} from your shell or from a .env file next to compose.yaml. The checkout has no .env, which is right: it must not be committed.",
+        "Create it (and keep it out of git): echo 'DB_PASSWORD=pick-a-long-one' > .env && docker compose up -d"
+      ],
+      lesson: "Compose reads variables from the shell and from .env. Keep secrets out of compose.yaml and out of git, and supply them on each machine.",
+      tries: ["docker compose up -d", "docker compose logs db", "ls -a"]
+    }
+  ];
+  const exposed = (e) => e.containers.filter((c) => c.state === "running" && c.ports.some((p) => p.hostIp !== "127.0.0.1"));
+  const NOEXEC_DOCKERFILE = 'FROM node:22-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci --omit=dev\nCOPY . .\nEXPOSE 3000\nENTRYPOINT ["/app/start.sh"]\n';
+  const BAD_DAEMON_JSON = '{\n  "log-driver": "json-file",\n  "log-opts": { "max-size": "10m", "max-file": "3" },\n}\n';
+  MORE.push(
+    {
+      id: "daemon", title: "Cannot connect to the daemon", level: "16",
+      story: "Someone added log rotation to /etc/docker/daemon.json and restarted Docker. Since then every docker command fails, and the web site is down.",
+      goal: "Get Docker running again with the log rotation kept, and the site back on localhost:8080.",
+      done: "Docker runs with log rotation, and the site is back.",
+      edit: ["daemon.json"], editDir: "/etc/docker",
+      files: { "/etc/docker/daemon.json": file(BAD_DAEMON_JSON, { uid: 0, gid: 0 }) },
+      setup: ["docker pull nginx:1.27", "docker run -d --name web --restart unless-stopped -p 8080:80 nginx:1.27", 600, (e) => { daemonStop(e); daemonStart(e); }, 5],
+      won: (e) => e.daemon.up && Boolean((e.daemon.conf["log-opts"] || {})["max-size"]) && serves(e, 8080, "Welcome to nginx"),
+      check: (e) => ({ label: "docker.service", text: e.daemon.up ? `running${(e.daemon.conf["log-opts"] || {})["max-size"] ? ", logs rotate" : ", no log rotation"}` : "failed" }),
+      hints: [
+        "docker ps: Cannot connect to the Docker daemon. Is it running? systemctl status docker",
+        "It failed to start. sudo journalctl -u docker says why: dockerd could not read /etc/docker/daemon.json. JSON allows no comma after the last entry.",
+        "Remove the trailing comma (in the editor, or sudo sed -i 's/},$/}/' /etc/docker/daemon.json), then sudo systemctl start docker. web comes back by itself: its restart policy is unless-stopped."
+      ],
+      lesson: "When docker cannot reach the daemon, ask systemd why: systemctl status docker and journalctl -u docker. Validate daemon.json before restarting (python3 -m json.tool or jq).",
+      tries: ["docker ps", "systemctl status docker", "sudo journalctl -u docker"]
+    },
+    {
+      id: "socket", title: "Permission denied on the socket", level: "00",
+      story: "A new laptop. Docker is installed and running, but docker ps says permission denied unless you put sudo in front.",
+      goal: "Run docker commands without sudo, without opening the socket to every user.",
+      done: "docker works for you without sudo.",
+      setup: [(e) => { e.groups = ["dev", "sudo"]; }],
+      won: (e) => e.groups.includes("docker") && !(e.host["/var/run/docker.sock"].mode & 0o006),
+      check: (e) => ({ label: "docker without sudo", text: e.host["/var/run/docker.sock"].mode & 0o006 ? "socket open to every user" : e.groups.includes("docker") ? "allowed, through the docker group" : e.pendingGroups.includes("docker") ? "added to docker, not active in this shell yet" : "permission denied" }),
+      hints: [
+        "docker ps: permission denied on /var/run/docker.sock. ls -l /var/run/docker.sock shows who may use it.",
+        "The socket belongs to root and the docker group, mode srw-rw----. id shows you are not in that group. chmod 666 would let every user on the machine control Docker, which is root.",
+        "Join the group, then start a shell that has it: sudo usermod -aG docker dev && newgrp docker (or log out and back in)."
+      ],
+      lesson: "Access to the Docker socket is root on the host. Grant it through the docker group to the people who need it (or use rootless Docker), never with chmod 666.",
+      tries: ["docker ps", "ls -l /var/run/docker.sock", "id"]
+    },
+    {
+      id: "args", title: "Arguments replace CMD", level: "02",
+      story: "To get more detail, ops added --verbose to the end of the shop's docker run command. Now the shop exits at once with code 9.",
+      goal: "Run the shop with verbose logging, answering on localhost:3000.",
+      done: "The shop runs with verbose logging.",
+      files: shopFiles(DEV_DOCKERFILE, NODE_IGNORE, false),
+      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", `cd ${HOME}`, 60, "docker run -d --name shop -p 3000:3000 quest/shop:1.0 --verbose", 1],
+      won: (e) => serves(e, 3000, "shop: ok") && runningOf(e, "quest/shop").some((c) => c.proc.debug),
+      check: (e) => { const c = byImage(e, "quest/shop")[0]; return { label: "shop", text: !c ? "no shop container" : c.state !== "running" ? statusOf(e, c) : c.proc.debug ? "running, verbose" : "running, not verbose" }; },
+      hints: [
+        "docker logs shop: node: bad option: --verbose. Who received that flag?",
+        "Anything after the image name replaces CMD. The image's CMD was node server.js; now it is just --verbose, and the node image's entrypoint runs node --verbose.",
+        "Pass the whole command, or use the app's setting instead: docker rm shop && docker run -d --name shop -p 3000:3000 quest/shop:1.0 node server.js --verbose (or -e LOG_LEVEL=debug)."
+      ],
+      lesson: "Arguments after the image replace CMD entirely; they are not appended. ENTRYPOINT stays, which is why images put the fixed part there and defaults in CMD.",
+      tries: ["docker ps -a", "docker logs shop", "docker inspect quest/shop:1.0 --format '{{.Config.Entrypoint}} {{.Config.Cmd}}'"]
+    },
+    {
+      id: "noexec", title: "Entrypoint permission denied", level: "03",
+      story: "The shop now starts through a start.sh script, written on a laptop and committed as is. The container never starts.",
+      goal: "Get the shop answering on localhost:3000, still starting through start.sh.",
+      done: "start.sh runs and the shop answers.",
+      edit: ["Dockerfile", "start.sh"], editDir: `${HOME}/shop`,
+      files: { ...shopFiles(NOEXEC_DOCKERFILE, NODE_IGNORE, false), [`${HOME}/shop/start.sh`]: file('#!/bin/sh\nset -e\necho "shop: starting"\nexec node server.js "$@"\n', { mode: 0o644 }) },
+      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", 10, "docker run -d --name shop -p 3000:3000 quest/shop:1.0", 1],
+      won: (e) => serves(e, 3000, "shop: ok") && runningOf(e, "quest/shop").some((c) => (c.entrypoint || [])[0] === "/app/start.sh"),
+      check: (e) => ({ label: "curl localhost:3000", text: answer(e, 3000) }),
+      hints: [
+        "docker start shop and read the end of the error: exec: \"/app/start.sh\": permission denied.",
+        "ls -l start.sh: -rw-r--r--, no x bit. COPY keeps the file's mode, and nobody, not even root, can execute a file without one. --privileged or -u root does not change that.",
+        "Make it executable and rebuild: chmod +x start.sh && docker build -t quest/shop:1.1 . && docker rm shop && docker run -d --name shop -p 3000:3000 quest/shop:1.1 (or COPY --chmod=755 in the Dockerfile)."
+      ],
+      lesson: "Scripts need the executable bit inside the image. Set it in git (git update-index --chmod=+x), with COPY --chmod, or with RUN chmod +x.",
+      tries: ["docker start shop", "ls -l start.sh", "cat Dockerfile"]
+    },
+    {
+      id: "exposed", title: "Database open to the internet", level: "15",
+      story: "An external scan reached the production database on port 5432. The firewall (ufw) only allows SSH, so how did it get through?",
+      goal: "Make the database unreachable from outside the host, keep its data, and keep api working.",
+      done: "Only api can reach the database.",
+      files: service(`${HOME}/orders`, "orders.js", "orders", "node", 8080, ["pg"]),
+      setup: [`cd ${HOME}/orders`, "docker build -t quest/orders:1.0 .", `cd ${HOME}`, "docker network create app-net",
+        "docker run -d --name db --network app-net -p 5432:5432 -e POSTGRES_PASSWORD=kitchen-practice -v pgdata:/var/lib/postgresql/data postgres:17", 2,
+        "docker run -d --name api --network app-net -p 8080:8080 -e DB_HOST=db quest/orders:1.0", 600],
+      won: (e) => { const db = e.containers.find((c) => c.state === "running" && c.proc.app === "postgres"); return Boolean(db && !exposed(e).includes(db) && db.mounts.some((m) => m.name === "pgdata") && viaDns(e, "api") && serves(e, 8080, "orders: ok")); },
+      check: (e) => { const db = e.containers.find((c) => c.proc.app === "postgres" && c.state === "running"); return { label: "db from the internet", text: !db ? "db not running" : exposed(e).includes(db) ? `reachable on 0.0.0.0:${db.ports[0].host}` : "not reachable" }; },
+      hints: [
+        "docker ps: db publishes 0.0.0.0:5432->5432/tcp. sudo ufw status says 5432 is not allowed, yet the scan got in.",
+        "Docker writes its own iptables rules for published ports (sudo iptables -L DOCKER -n), and they are checked before ufw's. A ufw rule cannot close a published port.",
+        "api reaches db by name over app-net and needs no published port. Re-create db without -p, on the same volume: docker rm -f db && docker run -d --name db --network app-net -e POSTGRES_PASSWORD=kitchen-practice -v pgdata:/var/lib/postgresql/data postgres:17"
+      ],
+      lesson: "Publishing a port opens it on every interface, past ufw. Publish only what must be public; reach internal services over a network, or bind to 127.0.0.1.",
+      tries: ["docker ps", "sudo ufw status", "sudo iptables -L DOCKER -n"]
+    },
+    {
+      id: "hostgateway", title: "Reaching the host", level: "07",
+      story: "Redis runs directly on this Linux server, not in a container. api uses REDIS_HOST=host.docker.internal, which worked on a Docker Desktop laptop, and exits here.",
+      goal: "Let api reach Redis on the host, keeping api on its own network.",
+      done: "api reaches Redis on the host.",
+      files: service(`${HOME}/api`, "api.js", "api", "node", 8080, ["ioredis"]),
+      setup: [(e) => { e.hostServices = { 6379: "redis" }; }, `cd ${HOME}/api`, "docker build -t quest/api:1.0 .", `cd ${HOME}`, 30, "docker run -d --name api -p 8080:8080 -e REDIS_HOST=host.docker.internal quest/api:1.0", 1],
+      won: (e) => { const c = named(e, "api"); return Boolean(c && c.state === "running" && c.proc.via === "hosts" && c.netMode !== "host"); },
+      check: (e) => { const c = named(e, "api"); return { label: "api → redis on the host", text: !c ? "no api container" : c.state !== "running" ? statusOf(e, c) : c.proc.via === "hosts" ? "through host.docker.internal" : c.proc.via === "host" ? "using the host's network" : "by IP address" }; },
+      hints: [
+        "docker logs api: ENOTFOUND host.docker.internal. ss -ltn shows Redis listening on 0.0.0.0:6379 on the host.",
+        "Docker Desktop defines host.docker.internal for you; Docker Engine on Linux does not. localhost would be the container itself.",
+        "Map the name to the host's gateway address: docker rm api && docker run -d --name api -p 8080:8080 --add-host=host.docker.internal:host-gateway -e REDIS_HOST=host.docker.internal quest/api:1.0"
+      ],
+      lesson: "On Linux, add --add-host=host.docker.internal:host-gateway (extra_hosts in Compose) to reach services on the host, and make sure they listen on an address the bridge can reach.",
+      tries: ["docker logs api", "ss -ltn", "docker inspect api --format '{{.HostConfig.ExtraHosts}}'"]
+    },
+    {
+      id: "pgupgrade", title: "Database files are incompatible", level: "14",
+      story: "A routine update bumped the database image from postgres:16 to postgres:17. db now exits on every start.",
+      goal: "Get db running again with all of its data.",
+      done: "db runs on its existing data.",
+      setup: ["docker pull postgres:16", "docker run -d --name db -e POSTGRES_PASSWORD=kitchen-practice -v pgdata:/var/lib/postgresql/data postgres:16", 43200, "docker rm -f db", "docker pull postgres:17",
+        "docker run -d --name db -e POSTGRES_PASSWORD=kitchen-practice -v pgdata:/var/lib/postgresql/data postgres:17", 2],
+      won: (e) => e.containers.some((c) => c.state === "running" && c.proc.app === "postgres" && c.mounts.some((m) => m.name === "pgdata")) && Boolean(e.volumes.pgdata && /^16/.test((e.volumes.pgdata.fs["/PG_VERSION"] || {}).text || "")),
+      check: (e) => { const v = e.volumes.pgdata; const c = e.containers.find((x) => x.proc.app === "postgres" || /postgres/.test(x.image)); return { label: "db", text: `${c ? statusOf(e, c) : "no db container"} · ${v ? `data from PostgreSQL ${((v.fs["/PG_VERSION"] || {}).text || "?").trim()}` : "pgdata deleted"}` }; },
+      hints: [
+        "docker logs db: database files are incompatible with server. The data directory was made by version 16.",
+        "A major PostgreSQL version cannot open another major's files; it needs pg_upgrade or a dump and restore. Deleting the volume would start an empty database.",
+        "Go back to the version that owns the data, then plan the upgrade: docker rm db && docker run -d --name db -e POSTGRES_PASSWORD=kitchen-practice -v pgdata:/var/lib/postgresql/data postgres:16"
+      ],
+      lesson: "Pin database images to a major version. Upgrade majors deliberately (dump and restore, or pg_upgrade), with a backup, never through a moving tag.",
+      tries: ["docker ps -a", "docker logs db", "docker volume ls"]
+    }
+  );
+  SCENARIOS.push(...MORE);
+  // Easiest first: one container, then networks, storage, builds, registries, Compose, production, security.
+  const GROUPS = [
+    ["Basics", ["exits", "port", "typo", "conflict", "socket", "args"]],
+    ["Networking", ["dns", "localhost", "isolated", "loopback", "portinuse", "hostgateway"]],
+    ["Storage", ["volmask", "datalost", "perms"]],
+    ["Images and builds", ["cache", "bigimage", "copymissing", "exit127", "noexec", "platform"]],
+    ["Registries and upgrades", ["stale", "auth", "ratelimit", "pgupgrade"]],
+    ["Compose", ["composedns", "composeenv", "composeorder"]],
+    ["Running in production", ["restartloop", "healthcheck", "oom", "nologs", "logs", "diskfull", "daemon"]],
+    ["Security", ["exposed", "readonly", "capdrop", "secretlayer"]]
+  ];
   const ORDER = GROUPS.flatMap(([, ids]) => ids);
   SCENARIOS.sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
 
@@ -2199,7 +3457,9 @@
     "  docker run | create | start | stop | restart | kill | rm | ps [-a] | logs | inspect | exec | port | update | stats --no-stream",
     "  docker images | pull | tag | rmi | history | build [-t] [-f] [--no-cache] | system df | system prune | image prune | builder prune",
     "  docker volume ls|create|inspect|rm      docker network ls|create|inspect|rm|connect|disconnect",
-    "  on your machine: curl, ls, cat, cd, pwd, echo, printf, touch, mkdir, rm, du -sh, chown, chmod, id, sed -i, grep (and sudo)",
+    "  docker compose up|down|ps|logs|restart|exec|config      docker login|logout      docker rename",
+    "  on your machine: curl, ls, cat, cd, pwd, echo, printf, export, touch, mkdir, rm, du -sh, df -h, chown, chmod, id, sed -i, grep,",
+    "  systemctl and journalctl (docker), usermod, newgrp, ufw, iptables -L, ss -ltn (and sudo)",
     "  && and ; chain commands; | pipes into grep, head, tail, sort or wc -l; > and >> write files.",
     "  hint (three per scenario), reset, next, clear"
   ];
@@ -2220,6 +3480,7 @@
   const picker = document.getElementById("pg-scenarios");
   const tries = document.getElementById("pg-try");
   const editor = document.getElementById("pg-editor");
+  const link = document.getElementById("pg-link");
 
   const saved = {
     get() { try { return JSON.parse(localStorage.getItem("dq-docker:pg-solved")) || []; } catch { return []; } },
@@ -2257,7 +3518,7 @@
         if (done.has(s.id)) b.append(el("span", "pg-scn-done", "✓"));
         b.append(document.createTextNode(s.title));
         b.title = done.has(s.id) ? `${s.title} (solved)` : s.title;
-        b.addEventListener("click", () => load(s.id));
+        b.addEventListener("click", () => { load(s.id); history.replaceState(null, "", "#play/" + s.id); });
         items.append(b);
       }
       const n = ids.filter((id) => done.has(id)).length;
@@ -2290,15 +3551,13 @@
 
   function renderMap() {
     const boxes = [];
-    const nets = Object.values(engine.networks).filter((n) => n.name === "bridge" || engine.containers.some((c) => c.nets[n.name] || c.netMode === n.name));
+    const nets = Object.values(engine.networks).filter((n) => engine.containers.some((c) => c.nets[n.name] || c.netMode === n.name));
     for (const n of nets) {
       const box = el("div", "pg-net");
       const head = el("div", "pg-net-name", n.name);
       head.append(el("span", "pg-net-kind", n.user ? "user-defined · DNS by name" : n.name === "bridge" ? "default bridge · no DNS" : n.driver));
       box.append(head);
-      const list = engine.containers.filter((c) => c.nets[n.name] || c.netMode === n.name);
-      if (!list.length) box.append(el("span", "muted small", "No containers"));
-      list.forEach((c) => box.append(chip(c)));
+      engine.containers.filter((c) => c.nets[n.name] || c.netMode === n.name).forEach((c) => box.append(chip(c)));
       boxes.push(box);
     }
     seen = new Map(engine.containers.map((c) => [c.id, c.state === "running" ? "ok" : c.state]));
@@ -2399,6 +3658,7 @@
     print("");
     goal.textContent = "Goal: " + scenario.goal;
     goal.className = "pg-goal";
+    link.replaceChildren(window.DQUI.copyLink("play/" + scenario.id, "scenario"));
     renderPicker();
     renderTries();
     renderEditor();
@@ -2483,6 +3743,8 @@
   window.DQPlayground = {
     scenarios: SCENARIOS.map((s) => ({ id: s.id, title: s.title })),
     load: (id) => { load(id); reveal(); },
+    // From a #play/<id> link.
+    open: (id) => { if (SCENARIOS.some((s) => s.id === id)) { if (id !== scenario.id) load(id); reveal(); } },
     // From the cheat sheet: open the scenario a command needs, fill its blanks and run it.
     prefill: (cmd, where) => {
       if (where && where !== "any" && where !== scenario.id) load(where);

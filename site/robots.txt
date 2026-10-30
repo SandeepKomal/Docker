@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://sandeepkomal.github.io/Docker/sitemap.xml
