@@ -19,7 +19,7 @@
   <main class="wrap problems">
     <p class="eyebrow"><a href="index.html">Docker Quest</a></p>
     <h1>Docker problems and fixes</h1>
-    <p class="lede">54 problems people meet with Docker, each with the exact error, what it means, how to confirm it, the fix and how to prevent it. Practise each one in the <a href="index.html#pg-title">browser playground</a>.</p>
+    <p class="lede">54 problems people meet with Docker, each with the exact error, why it happens, how to confirm it, the fix and how to prevent it. Then learn it for good: break and fix each one yourself in the <a href="index.html#pg-title">browser playground</a>.</p>
     <nav class="card problems-index" aria-label="Problems">
       <h2>Docker itself</h2>
       <ul>
@@ -108,7 +108,7 @@
       <h3>Cannot connect to the Docker daemon</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The docker CLI found no daemon listening on the socket: dockerd is stopped or failed to start.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -128,13 +128,13 @@ docker context ls</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Validate daemon.json before restarting (python3 -m json.tool /etc/docker/daemon.json) and change it through configuration management.</p>
-      <p class="note">Practise it: <a href="index.html#play/daemon">Cannot connect to the daemon</a>. Learn it: <a href="index.html#path">Level 16 · Troubleshooting and cleanup</a>. <a href="index.html#fix/daemon-down">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/daemon">Cannot connect to the daemon</a>, then take <a href="index.html#path">Level 16 · Troubleshooting and cleanup</a>. <a href="index.html#fix/daemon-down">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="socket-denied">
       <h3>permission denied on /var/run/docker.sock</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>Your user may not open the Docker socket, which belongs to root and the docker group.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -151,13 +151,13 @@ id</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Remember that the docker group is root-equivalent: grant it deliberately, or use rootless Docker. Never chmod 666 the socket.</p>
-      <p class="note">Practise it: <a href="index.html#play/socket">Permission denied on the socket</a>. Learn it: <a href="index.html#path">Level 00 · Your first container</a>. <a href="index.html#fix/socket-denied">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/socket">Permission denied on the socket</a>, then take <a href="index.html#path">Level 00 · Your first container</a>. <a href="index.html#fix/socket-denied">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="compose-v1">
       <h3>docker-compose: command not found</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>docker-compose: command not found</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The old standalone docker-compose (v1) is gone; Compose v2 ships as a docker plugin.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -172,13 +172,13 @@ id</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Update scripts and CI to docker compose; v1 has been unsupported since 2023.</p>
-      <p class="note">Practise it: <a href="index.html#play/composedns">Compose: wrong host</a>. Learn it: <a href="index.html#path">Level 10 · Compose</a>. <a href="index.html#fix/compose-v1">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/composedns">Compose: wrong host</a>, then take <a href="index.html#path">Level 10 · Compose</a>. <a href="index.html#fix/compose-v1">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="pids-exhausted">
       <h3>fork: Resource temporarily unavailable</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>fork() failed while spawning &quot;worker process&quot; (11: Resource temporarily unavailable)</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The host (or a container's cgroup) has no process IDs left, so programs cannot start processes or threads.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -198,13 +198,13 @@ docker exec &lt;name&gt; cat /sys/fs/cgroup/pids.max</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Set --pids-limit (pids_limit in Compose) on every container, so one leak cannot take the host down.</p>
-      <p class="note">Practise it: <a href="index.html#play/pids">Out of processes</a>. Learn it: <a href="index.html#path">Level 12 · Limits and OOM</a>. <a href="index.html#fix/pids-exhausted">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/pids">Out of processes</a>, then take <a href="index.html#path">Level 12 · Limits and OOM</a>. <a href="index.html#fix/pids-exhausted">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="cpu-throttled">
       <h3>Slow or timing out at a CPU limit</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>curl: (28) Operation timed out after 5001 milliseconds with 0 bytes received</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The container hit its CPU quota and the kernel throttles it. Nothing crashes; everything is slow.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -221,14 +221,14 @@ docker exec &lt;name&gt; cat /sys/fs/cgroup/cpu.stat   # nr_throttled</code></pr
       </ol>
       <h4>Prevent it</h4>
       <p>Size CPU limits from measured load with headroom, and alert on throttling, not only on errors.</p>
-      <p class="note">Practise it: <a href="index.html#play/cpu">Throttled CPU</a>. Learn it: <a href="index.html#path">Level 12 · Limits and OOM</a>. <a href="index.html#fix/cpu-throttled">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/cpu">Throttled CPU</a>, then take <a href="index.html#path">Level 12 · Limits and OOM</a>. <a href="index.html#fix/cpu-throttled">Open in Docker Quest</a>.</p>
     </section>
     <h2 class="section-title">Container will not stay up</h2>
     <section class="card fix problem" id="exited-0">
       <h3>Exited (0) right after it starts</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Exited (0) 2 seconds ago</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The main process finished without an error. A container lives exactly as long as PID 1.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -247,13 +247,13 @@ docker logs &lt;name&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Use the image's default command when you can; never background the main process.</p>
-      <p class="note">Practise it: <a href="index.html#play/exits">Exits immediately</a>. Learn it: <a href="index.html#path">Level 02 · Why did it exit?</a>. <a href="index.html#fix/exited-0">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/exits">Exits immediately</a>, then take <a href="index.html#path">Level 02 · Why did it exit?</a>. <a href="index.html#fix/exited-0">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="exited-1">
       <h3>Exited (1) or another non-zero code</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Exited (1) 3 seconds ago</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The app started and failed. The reason is almost always in its last log lines.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -272,13 +272,13 @@ docker inspect &lt;name&gt; --format '{{json .Mounts}}'</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Make apps fail with a clear message on bad configuration, and check required variables at start.</p>
-      <p class="note">Practise it: <a href="index.html#play/dns">Name not found</a> · <a href="index.html#play/volmask">Mount hides the app</a> · <a href="index.html#play/perms">Permission denied</a> · <a href="index.html#play/restartloop">Restarting forever</a>. Learn it: <a href="index.html#path">Level 02 · Why did it exit?</a>. <a href="index.html#fix/exited-1">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/dns">Name not found</a> · <a href="index.html#play/volmask">Mount hides the app</a> · <a href="index.html#play/perms">Permission denied</a> · <a href="index.html#play/restartloop">Restarting forever</a>, then take <a href="index.html#path">Level 02 · Why did it exit?</a>. <a href="index.html#fix/exited-1">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="oom-137">
       <h3>Exited (137), OOMKilled true</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Exited (137)</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>137 is 128 + 9: the process received SIGKILL. With OOMKilled true, the kernel killed it for passing its memory limit.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -297,13 +297,13 @@ sudo dmesg | grep -i oom</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Size limits from measured use under load (docker stats), with headroom, and alert on restarts.</p>
-      <p class="note">Practise it: <a href="index.html#play/oom">OOMKilled</a>. Learn it: <a href="index.html#path">Level 12 · Limits and OOM</a>. <a href="index.html#fix/oom-137">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/oom">OOMKilled</a>, then take <a href="index.html#path">Level 12 · Limits and OOM</a>. <a href="index.html#fix/oom-137">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="stop-slow">
       <h3>docker stop takes 10 seconds, then Exited (137)</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Exited (137) 1 second ago   (after docker stop)</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The process ignored SIGTERM, so Docker waited for the grace period and sent SIGKILL. In-flight work is cut off.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -323,13 +323,13 @@ docker inspect &lt;name&gt; --format '{{.Path}} {{.Args}}'</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Test shutdown in CI: docker stop must finish well inside its timeout with exit code 0 or 143.</p>
-      <p class="note">Practise it: <a href="index.html#play/sigterm">docker stop takes 10 seconds</a>. Learn it: <a href="index.html#path">Level 11 · Healthchecks and restarts</a>. <a href="index.html#fix/stop-slow">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/sigterm">docker stop takes 10 seconds</a>, then take <a href="index.html#path">Level 11 · Healthchecks and restarts</a>. <a href="index.html#fix/stop-slow">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="exec-format">
       <h3>exec format error</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>exec /usr/local/bin/docker-entrypoint.sh: exec format error</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The image's binaries are for another CPU architecture than this host. The container exits with 255.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -347,13 +347,13 @@ docker buildx imagetools inspect &lt;image&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Build release images in CI for every platform you run on.</p>
-      <p class="note">Practise it: <a href="index.html#play/platform">exec format error</a>. Learn it: <a href="index.html#path">Level 14 · Registries and platforms</a>. <a href="index.html#fix/exec-format">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/platform">exec format error</a>, then take <a href="index.html#path">Level 14 · Registries and platforms</a>. <a href="index.html#fix/exec-format">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="not-found-127">
       <h3>executable file not found in $PATH</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>exec: &quot;nodejs&quot;: executable file not found in $PATH: unknown</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>runc could not find the program to start, so the container never ran (exit code 127).</p>
       <h4>Likely causes</h4>
       <ul>
@@ -369,13 +369,13 @@ docker run --rm --entrypoint ls &lt;image&gt; /usr/local/bin</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Run the image once in CI (a smoke test) before it is published.</p>
-      <p class="note">Practise it: <a href="index.html#play/exit127">Executable not found</a>. Learn it: <a href="index.html#path">Level 02 · Why did it exit?</a>. <a href="index.html#fix/not-found-127">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/exit127">Executable not found</a>, then take <a href="index.html#path">Level 02 · Why did it exit?</a>. <a href="index.html#fix/not-found-127">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="permission-126">
       <h3>exec: permission denied (entrypoint script)</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>exec: &quot;/app/start.sh&quot;: permission denied: unknown</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The entrypoint exists but has no executable bit, and nobody, not even root, may execute it (exit code 126).</p>
       <h4>Likely causes</h4>
       <ul>
@@ -392,13 +392,13 @@ docker run --rm --entrypoint ls &lt;image&gt; -l /app/start.sh</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Store the bit in git (git update-index --chmod=+x start.sh) and set it in the Dockerfile.</p>
-      <p class="note">Practise it: <a href="index.html#play/noexec">Entrypoint permission denied</a>. Learn it: <a href="index.html#path">Level 03 · Your first Dockerfile</a>. <a href="index.html#fix/permission-126">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/noexec">Entrypoint permission denied</a>, then take <a href="index.html#path">Level 03 · Your first Dockerfile</a>. <a href="index.html#fix/permission-126">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="bad-option">
       <h3>node: bad option (arguments replaced CMD)</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>node: bad option: --verbose</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>Arguments after the image name replace CMD entirely, so the program received only your flag.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -414,13 +414,13 @@ docker inspect &lt;name&gt; --format '{{.Path}} {{.Args}}'</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Put the fixed program in ENTRYPOINT and only defaults in CMD, so arguments add to it.</p>
-      <p class="note">Practise it: <a href="index.html#play/args">Arguments replace CMD</a>. Learn it: <a href="index.html#path">Level 02 · Why did it exit?</a>. <a href="index.html#fix/bad-option">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/args">Arguments replace CMD</a>, then take <a href="index.html#path">Level 02 · Why did it exit?</a>. <a href="index.html#fix/bad-option">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="restarting">
       <h3>Restarting (1) over and over</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Restarting (1) 5 seconds ago</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>A restart policy keeps starting a process that keeps failing. The policy hides the crash; it does not fix it.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -436,13 +436,13 @@ docker inspect &lt;name&gt; --format '{{.RestartCount}} {{.HostConfig.RestartPol
       </ol>
       <h4>Prevent it</h4>
       <p>Alert on restart counts, not only on containers that are down.</p>
-      <p class="note">Practise it: <a href="index.html#play/restartloop">Restarting forever</a>. Learn it: <a href="index.html#path">Level 11 · Healthchecks and restarts</a>. <a href="index.html#fix/restarting">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/restartloop">Restarting forever</a>, then take <a href="index.html#path">Level 11 · Healthchecks and restarts</a>. <a href="index.html#fix/restarting">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="no-user">
       <h3>unable to find user</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>unable to find user app: no matching entries in passwd file</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>USER or --user names an account that does not exist inside the image.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -458,14 +458,14 @@ docker run --rm --entrypoint cat &lt;image&gt; /etc/passwd</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Prefer numeric USER 10001:10001 in images; it also makes file ownership predictable.</p>
-      <p class="note">Practise it: <a href="index.html#play/perms">Permission denied</a>. Learn it: <a href="index.html#path">Level 09 · Users and permissions</a>. <a href="index.html#fix/no-user">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/perms">Permission denied</a>, then take <a href="index.html#path">Level 09 · Users and permissions</a>. <a href="index.html#fix/no-user">Open in Docker Quest</a>.</p>
     </section>
     <h2 class="section-title">Cannot create or start it</h2>
     <section class="card fix problem" id="name-conflict">
       <h3>Conflict. The container name is already in use</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Conflict. The container name &quot;/web&quot; is already in use by container</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>Names are unique, and a stopped container still holds its name.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -480,13 +480,13 @@ docker run --rm --entrypoint cat &lt;image&gt; /etc/passwd</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Deploy scripts remove or rename the old container first; Compose does this for you.</p>
-      <p class="note">Practise it: <a href="index.html#play/conflict">Name already in use</a>. Learn it: <a href="index.html#path">Level 00 · Your first container</a>. <a href="index.html#fix/name-conflict">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/conflict">Name already in use</a>, then take <a href="index.html#path">Level 00 · Your first container</a>. <a href="index.html#fix/name-conflict">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="port-allocated">
       <h3>port is already allocated</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Bind for 0.0.0.0:8080 failed: port is already allocated</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>Another container, or another program on the host, already holds that host port.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -503,13 +503,13 @@ sudo ss -ltnp | grep 8080</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Replace containers in one step (stop old, start new), or put a reverse proxy in front.</p>
-      <p class="note">Practise it: <a href="index.html#play/portinuse">Port already allocated</a>. Learn it: <a href="index.html#path">Level 06 · Ports</a>. <a href="index.html#fix/port-allocated">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/portinuse">Port already allocated</a>, then take <a href="index.html#path">Level 06 · Ports</a>. <a href="index.html#fix/port-allocated">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="not-running">
       <h3>container is not running (docker exec)</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Error response from daemon: container 3f2a... is not running</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>docker exec only works in a running container; there is no process to join.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -525,13 +525,13 @@ docker logs &lt;name&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Debug from logs first; exec is for running containers.</p>
-      <p class="note">Practise it: <a href="index.html#play/volmask">Mount hides the app</a>. Learn it: <a href="index.html#path">Level 02 · Why did it exit?</a>. <a href="index.html#fix/not-running">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/volmask">Mount hides the app</a>, then take <a href="index.html#path">Level 02 · Why did it exit?</a>. <a href="index.html#fix/not-running">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="min-memory">
       <h3>Minimum memory limit allowed is 6MB</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Minimum memory limit allowed is 6MB.</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>Docker refuses memory limits too small for any process.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -545,13 +545,13 @@ docker logs &lt;name&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Always write units on memory flags.</p>
-      <p class="note">Practise it: <a href="index.html#play/oom">OOMKilled</a>. Learn it: <a href="index.html#path">Level 12 · Limits and OOM</a>. <a href="index.html#fix/min-memory">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/oom">OOMKilled</a>, then take <a href="index.html#path">Level 12 · Limits and OOM</a>. <a href="index.html#fix/min-memory">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="memoryswap">
       <h3>Memory limit should be smaller than already set memoryswap limit</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Memory limit should be smaller than already set memoryswap limit, update the memoryswap at the same time</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>docker update refuses a memory limit above the container's existing memory-plus-swap limit.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -565,14 +565,14 @@ docker logs &lt;name&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Set both flags together whenever you change a limit.</p>
-      <p class="note">Practise it: <a href="index.html#play/oom">OOMKilled</a>. Learn it: <a href="index.html#path">Level 12 · Limits and OOM</a>. <a href="index.html#fix/memoryswap">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/oom">OOMKilled</a>, then take <a href="index.html#path">Level 12 · Limits and OOM</a>. <a href="index.html#fix/memoryswap">Open in Docker Quest</a>.</p>
     </section>
     <h2 class="section-title">Cannot reach it</h2>
     <section class="card fix problem" id="connect-7">
       <h3>curl: (7) Couldn't connect to server</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>curl: (7) Failed to connect to localhost port 8080 after 0 ms: Couldn't connect to server</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>Nothing listens on that host port.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -589,13 +589,13 @@ docker port &lt;name&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Keep run options in a compose file so they are not forgotten.</p>
-      <p class="note">Practise it: <a href="index.html#play/port">Port not published</a> · <a href="index.html#play/exits">Exits immediately</a>. Learn it: <a href="index.html#path">Level 06 · Ports</a>. <a href="index.html#fix/connect-7">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/port">Port not published</a> · <a href="index.html#play/exits">Exits immediately</a>, then take <a href="index.html#path">Level 06 · Ports</a>. <a href="index.html#fix/connect-7">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="reset-56">
       <h3>curl: (56) Connection reset by peer</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>curl: (56) Recv failure: Connection reset by peer</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>Docker accepted the connection on the host port, but nothing answered on the container side.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -613,13 +613,13 @@ docker exec &lt;name&gt; wget -qO- localhost:&lt;port&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Configure servers to bind 0.0.0.0 in containers; restrict exposure with -p 127.0.0.1:... instead.</p>
-      <p class="note">Practise it: <a href="index.html#play/port">Port not published</a> · <a href="index.html#play/loopback">Listening on 127.0.0.1</a>. Learn it: <a href="index.html#path">Level 06 · Ports</a>. <a href="index.html#fix/reset-56">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/port">Port not published</a> · <a href="index.html#play/loopback">Listening on 127.0.0.1</a>, then take <a href="index.html#path">Level 06 · Ports</a>. <a href="index.html#fix/reset-56">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="enotfound">
       <h3>getaddrinfo ENOTFOUND / bad address</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Error: getaddrinfo ENOTFOUND cache</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The container cannot resolve the hostname it was given.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -638,13 +638,13 @@ docker exec &lt;name&gt; nslookup &lt;other&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Put services that talk to each other on one user-defined network (Compose does it by default).</p>
-      <p class="note">Practise it: <a href="index.html#play/dns">Name not found</a> · <a href="index.html#play/isolated">Different networks</a>. Learn it: <a href="index.html#path">Level 07 · Networks and DNS</a>. <a href="index.html#fix/enotfound">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/dns">Name not found</a> · <a href="index.html#play/isolated">Different networks</a>, then take <a href="index.html#path">Level 07 · Networks and DNS</a>. <a href="index.html#fix/enotfound">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="econnrefused-localhost">
       <h3>ECONNREFUSED 127.0.0.1</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Error: connect ECONNREFUSED 127.0.0.1:5432</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The app connects to localhost, which inside a container is the container itself.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -660,13 +660,13 @@ docker network inspect &lt;network&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Never default service addresses to localhost in container configuration.</p>
-      <p class="note">Practise it: <a href="index.html#play/localhost">localhost is the container</a> · <a href="index.html#play/composedns">Compose: wrong host</a> · <a href="index.html#play/composeorder">Compose: started too early</a>. Learn it: <a href="index.html#path">Level 07 · Networks and DNS</a>. <a href="index.html#fix/econnrefused-localhost">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/localhost">localhost is the container</a> · <a href="index.html#play/composedns">Compose: wrong host</a> · <a href="index.html#play/composeorder">Compose: started too early</a>, then take <a href="index.html#path">Level 07 · Networks and DNS</a>. <a href="index.html#fix/econnrefused-localhost">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="host-internal">
       <h3>host.docker.internal not found on Linux</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Error: getaddrinfo ENOTFOUND host.docker.internal</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>Docker Desktop defines host.docker.internal; Docker Engine on Linux does not, unless asked.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -682,13 +682,13 @@ ss -ltn   # is the host service listening beyond 127.0.0.1?</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Add the extra host in the compose file so it works the same everywhere.</p>
-      <p class="note">Practise it: <a href="index.html#play/hostgateway">Reaching the host</a>. Learn it: <a href="index.html#path">Level 07 · Networks and DNS</a>. <a href="index.html#fix/host-internal">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/hostgateway">Reaching the host</a>, then take <a href="index.html#path">Level 07 · Networks and DNS</a>. <a href="index.html#fix/host-internal">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="exposed-port">
       <h3>A published port is open despite ufw</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>0.0.0.0:5432-&gt;5432/tcp</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>Docker adds its own iptables rules for published ports, and they are evaluated before ufw's.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -705,14 +705,14 @@ sudo ufw status</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Publish only public services; review docker ps PORTS in security checks.</p>
-      <p class="note">Practise it: <a href="index.html#play/exposed">Database open to the internet</a>. Learn it: <a href="index.html#path">Level 15 · Container security</a>. <a href="index.html#fix/exposed-port">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/exposed">Database open to the internet</a>, then take <a href="index.html#path">Level 15 · Container security</a>. <a href="index.html#fix/exposed-port">Open in Docker Quest</a>.</p>
     </section>
     <h2 class="section-title">Files and permissions</h2>
     <section class="card fix problem" id="module-hidden">
       <h3>Cannot find module after mounting a folder</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Error: Cannot find module 'express'</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>A mount replaces what the image had at that path, so files the build put there are hidden.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -728,13 +728,13 @@ docker run --rm &lt;image&gt; ls /app</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Mount only what you edit (src/), or use Compose watch for development.</p>
-      <p class="note">Practise it: <a href="index.html#play/volmask">Mount hides the app</a>. Learn it: <a href="index.html#path">Level 08 · Volumes and bind mounts</a>. <a href="index.html#fix/module-hidden">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/volmask">Mount hides the app</a>, then take <a href="index.html#path">Level 08 · Volumes and bind mounts</a>. <a href="index.html#fix/module-hidden">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="eacces-mount">
       <h3>EACCES: permission denied on a mount</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Error: EACCES: permission denied, open '/data/uploads/.write-test'</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The container's user may not write to the mounted folder. Ownership is checked by UID number.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -750,13 +750,13 @@ ls -ln &lt;folder&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Give images a fixed numeric UID and create host folders with that owner.</p>
-      <p class="note">Practise it: <a href="index.html#play/perms">Permission denied</a>. Learn it: <a href="index.html#path">Level 09 · Users and permissions</a>. <a href="index.html#fix/eacces-mount">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/perms">Permission denied</a>, then take <a href="index.html#path">Level 09 · Users and permissions</a>. <a href="index.html#fix/eacces-mount">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="read-only">
       <h3>Read-only file system</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>mkdir() &quot;/var/cache/nginx/client_temp&quot; failed (30: Read-only file system)</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The container runs with --read-only and the app writes somewhere outside its writable mounts.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -771,13 +771,13 @@ docker inspect &lt;name&gt; --format '{{.HostConfig.ReadonlyRootfs}}'</code></pr
       </ol>
       <h4>Prevent it</h4>
       <p>Test images with --read-only in CI so writable paths are known.</p>
-      <p class="note">Practise it: <a href="index.html#play/readonly">Read-only file system</a>. Learn it: <a href="index.html#path">Level 15 · Container security</a>. <a href="index.html#fix/read-only">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/readonly">Read-only file system</a>, then take <a href="index.html#path">Level 15 · Container security</a>. <a href="index.html#fix/read-only">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="not-permitted">
       <h3>Operation not permitted (capabilities)</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>chown(&quot;/var/cache/nginx/client_temp&quot;, 101) failed (1: Operation not permitted)</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>Root inside the container lacks a Linux capability it needs, usually after --cap-drop.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -792,13 +792,13 @@ docker logs &lt;name&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Prefer images that run as non-root (nginx-unprivileged), which need no capabilities.</p>
-      <p class="note">Practise it: <a href="index.html#play/capdrop">Capabilities dropped</a>. Learn it: <a href="index.html#path">Level 15 · Container security</a>. <a href="index.html#fix/not-permitted">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/capdrop">Capabilities dropped</a>, then take <a href="index.html#path">Level 15 · Container security</a>. <a href="index.html#fix/not-permitted">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="data-lost">
       <h3>Data gone after re-creating a container</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>(integer) 0</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The data lived in the container's writable layer or in an anonymous volume that the new container does not reuse.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -816,14 +816,14 @@ docker image inspect &lt;image&gt; --format '{{json .Config.Volumes}}'</code></p
       </ol>
       <h4>Prevent it</h4>
       <p>Always name volumes for data; back them up.</p>
-      <p class="note">Practise it: <a href="index.html#play/datalost">Data gone after re-create</a>. Learn it: <a href="index.html#path">Level 08 · Volumes and bind mounts</a>. <a href="index.html#fix/data-lost">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/datalost">Data gone after re-create</a>, then take <a href="index.html#path">Level 08 · Volumes and bind mounts</a>. <a href="index.html#fix/data-lost">Open in Docker Quest</a>.</p>
     </section>
     <h2 class="section-title">Security findings</h2>
     <section class="card fix problem" id="scan-gate">
       <h3>Image scan finds critical or high vulnerabilities</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>✗ Detected 7 vulnerable packages with a total of 7 vulnerabilities</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>A scanner matched packages in the image against known vulnerabilities. Most come from the base image, often in packages the app never uses.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -841,13 +841,13 @@ docker scout quickview &lt;image&gt;   # how much comes from the base</code></pr
       </ol>
       <h4>Prevent it</h4>
       <p>Scan in CI with an exit code, rebuild images on a schedule, and keep bases small.</p>
-      <p class="note">Practise it: <a href="index.html#play/cves">Scan gate fails</a>. Learn it: <a href="index.html#path">Level 15 · Container security</a>. <a href="index.html#fix/scan-gate">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/cves">Scan gate fails</a>, then take <a href="index.html#path">Level 15 · Container security</a>. <a href="index.html#fix/scan-gate">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="docker-sock-mounted">
       <h3>docker.sock mounted into a container</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>-v /var/run/docker.sock:/var/run/docker.sock</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>Whatever runs in that container can use the full Docker API: start a privileged container, mount the host's root, and own the host. A :ro mount does not limit API calls.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -863,14 +863,14 @@ docker ps --filter volume=/var/run/docker.sock</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Treat socket access as root on the host: review it like any privileged access, and alert on new mounts of it.</p>
-      <p class="note">Practise it: <a href="index.html#play/dockersock">Docker socket in a container</a>. Learn it: <a href="index.html#path">Level 15 · Container security</a>. <a href="index.html#fix/docker-sock-mounted">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/dockersock">Docker socket in a container</a>, then take <a href="index.html#path">Level 15 · Container security</a>. <a href="index.html#fix/docker-sock-mounted">Open in Docker Quest</a>.</p>
     </section>
     <h2 class="section-title">Images and builds</h2>
     <section class="card fix problem" id="image-size">
       <h3>The image is far bigger than the app</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>quest/shop   1.0   1.62GB</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>Some layer carries more than the app needs. Image size is the sum of every layer, and a later rm does not shrink an earlier one.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -890,13 +890,13 @@ docker build .   # read: transferring context</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Track image size in CI and fail on large jumps.</p>
-      <p class="note">Practise it: <a href="index.html#play/bigimage">1.6 GB image</a>. Learn it: <a href="index.html#path">Level 05 · Small images</a>. <a href="index.html#fix/image-size">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/bigimage">1.6 GB image</a>, then take <a href="index.html#path">Level 05 · Small images</a>. <a href="index.html#fix/image-size">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="cache-miss">
       <h3>Every build reinstalls dependencies</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code> =&gt; [4/4] RUN npm ci   (never CACHED)</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The cache for a step breaks when anything it copies changes, and every later step runs again.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -913,13 +913,13 @@ docker history &lt;image&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Order instructions from least to most often changed; in CI, reuse cache with --cache-from.</p>
-      <p class="note">Practise it: <a href="index.html#play/cache">Cache busted on every change</a>. Learn it: <a href="index.html#path">Level 04 · Layers and the build cache</a>. <a href="index.html#fix/cache-miss">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/cache">Cache busted on every change</a>, then take <a href="index.html#path">Level 04 · Layers and the build cache</a>. <a href="index.html#fix/cache-miss">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="ci-cache">
       <h3>Cache export is not supported for the docker driver</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>ERROR: Cache export is not supported for the docker driver.</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>--cache-to needs a builder that can export cache, and CI runners start every job with an empty cache, so without one every step runs again.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -936,13 +936,13 @@ docker buildx build --progress=plain ...   # look for CACHED and importing cache
       </ol>
       <h4>Prevent it</h4>
       <p>Export and import the cache in every pipeline (registry, or type=gha on GitHub Actions).</p>
-      <p class="note">Practise it: <a href="index.html#play/cicache">CI rebuilds everything</a>. Learn it: <a href="index.html#path">Level 04 · Layers and the build cache</a>. <a href="index.html#fix/ci-cache">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/cicache">CI rebuilds everything</a>, then take <a href="index.html#path">Level 04 · Layers and the build cache</a>. <a href="index.html#fix/ci-cache">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="copy-not-found">
       <h3>COPY failed: not found</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>failed to calculate checksum of ref ...: &quot;/dist&quot;: not found</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The file is not in the build context Docker sent, even if it is on your disk.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -959,13 +959,13 @@ docker build --progress=plain .   # transferring context size</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Keep .dockerignore next to the Dockerfile and review it with the Dockerfile.</p>
-      <p class="note">Practise it: <a href="index.html#play/copymissing">COPY: not found</a>. Learn it: <a href="index.html#path">Level 03 · Your first Dockerfile</a>. <a href="index.html#fix/copy-not-found">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/copymissing">COPY: not found</a>, then take <a href="index.html#path">Level 03 · Your first Dockerfile</a>. <a href="index.html#fix/copy-not-found">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="unknown-instruction">
       <h3>dockerfile parse error: unknown instruction</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>dockerfile parse error on line 2: unknown instruction: COPPY</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The parser met a word that is not an instruction, often a typo or a broken line continuation.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -980,13 +980,13 @@ docker build --progress=plain .   # transferring context size</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Lint Dockerfiles in CI (hadolint, or the X-ray on this site).</p>
-      <p class="note">Practise it: <a href="index.html#play/copymissing">COPY: not found</a>. Learn it: <a href="index.html#path">Level 03 · Your first Dockerfile</a>. <a href="index.html#fix/unknown-instruction">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/copymissing">COPY: not found</a>, then take <a href="index.html#path">Level 03 · Your first Dockerfile</a>. <a href="index.html#fix/unknown-instruction">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="run-failed">
       <h3>did not complete successfully: exit code</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>process &quot;/bin/sh -c npm ci&quot; did not complete successfully: exit code: 1</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>A RUN step's command failed; its output is printed just above the error.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1003,13 +1003,13 @@ docker run --rm -it &lt;base-image&gt; sh   # try the command by hand</code></pr
       </ol>
       <h4>Prevent it</h4>
       <p>Commit lock files; build in CI with the same base images.</p>
-      <p class="note">Practise it: <a href="index.html#play/secretlayer">Token in a layer</a>. Learn it: <a href="index.html#path">Level 03 · Your first Dockerfile</a>. <a href="index.html#fix/run-failed">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/secretlayer">Token in a layer</a>, then take <a href="index.html#path">Level 03 · Your first Dockerfile</a>. <a href="index.html#fix/run-failed">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="secret-in-image">
       <h3>A secret found in an image</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>//npm.pkg.github.com/:_authToken=...</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>A credential was copied into a layer, set with ENV, or passed as a build argument. All of these stay in the image.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1027,14 +1027,14 @@ docker image inspect &lt;image&gt; --format '{{.Config.Env}}'</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Scan images for secrets in CI; keep credential files in .dockerignore.</p>
-      <p class="note">Practise it: <a href="index.html#play/secretlayer">Token in a layer</a>. Learn it: <a href="index.html#path">Level 15 · Container security</a>. <a href="index.html#fix/secret-in-image">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/secretlayer">Token in a layer</a>, then take <a href="index.html#path">Level 15 · Container security</a>. <a href="index.html#fix/secret-in-image">Open in Docker Quest</a>.</p>
     </section>
     <h2 class="section-title">Registries and upgrades</h2>
     <section class="card fix problem" id="pull-denied">
       <h3>pull access denied, repository does not exist</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>pull access denied for ngnix, repository does not exist or may require 'docker login': denied: requested access to the resource is denied</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The registry has no image by that name, or will not show it to you.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1050,13 +1050,13 @@ docker search &lt;name&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Pin images in one place (compose file, variables) instead of retyping them.</p>
-      <p class="note">Practise it: <a href="index.html#play/typo">pull access denied</a>. Learn it: <a href="index.html#path">Level 01 · Images and tags</a>. <a href="index.html#fix/pull-denied">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/typo">pull access denied</a>, then take <a href="index.html#path">Level 01 · Images and tags</a>. <a href="index.html#fix/pull-denied">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="manifest-unknown">
       <h3>manifest unknown</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>manifest for nginx:1.72 not found: manifest unknown: manifest unknown</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The repository exists but has no such tag (or digest).</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1071,13 +1071,13 @@ docker search &lt;name&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Promote images by digest between environments.</p>
-      <p class="note">Practise it: <a href="index.html#play/typo">pull access denied</a>. Learn it: <a href="index.html#path">Level 01 · Images and tags</a>. <a href="index.html#fix/manifest-unknown">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/typo">pull access denied</a>, then take <a href="index.html#path">Level 01 · Images and tags</a>. <a href="index.html#fix/manifest-unknown">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="x509-unknown-ca">
       <h3>x509: certificate signed by unknown authority</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>tls: failed to verify certificate: x509: certificate signed by unknown authority</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The registry's certificate was signed by a CA this machine does not trust, often a company's own CA or a TLS-inspecting proxy.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1095,13 +1095,13 @@ openssl s_client -connect &lt;registry&gt;:443 -showcerts &lt;/dev/null</code></
       </ol>
       <h4>Prevent it</h4>
       <p>Install the company CA with the machine image or configuration management. Never use insecure-registries to get past it.</p>
-      <p class="note">Practise it: <a href="index.html#play/x509">x509: unknown authority</a>. Learn it: <a href="index.html#path">Level 14 · Registries and platforms</a>. <a href="index.html#fix/x509-unknown-ca">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/x509">x509: unknown authority</a>, then take <a href="index.html#path">Level 14 · Registries and platforms</a>. <a href="index.html#fix/x509-unknown-ca">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="unauthorized">
       <h3>unauthorized (private registry)</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Head &quot;https://ghcr.io/v2/kitchen/shop/manifests/2.1&quot;: unauthorized</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The registry needs credentials for this image, and you have none for that registry.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1117,13 +1117,13 @@ openssl s_client -connect &lt;registry&gt;:443 -showcerts &lt;/dev/null</code></
       </ol>
       <h4>Prevent it</h4>
       <p>Use read-only pull tokens per machine or CI job, and a credential helper instead of plain config.</p>
-      <p class="note">Practise it: <a href="index.html#play/auth">Private registry</a>. Learn it: <a href="index.html#path">Level 14 · Registries and platforms</a>. <a href="index.html#fix/unauthorized">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/auth">Private registry</a>, then take <a href="index.html#path">Level 14 · Registries and platforms</a>. <a href="index.html#fix/unauthorized">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="rate-limit">
       <h3>toomanyrequests: pull rate limit</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>toomanyrequests: You have reached your unauthenticated pull rate limit. https://www.docker.com/increase-rate-limit</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>Docker Hub limits anonymous pulls per IP address, and this address has used its allowance.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1139,13 +1139,13 @@ openssl s_client -connect &lt;registry&gt;:443 -showcerts &lt;/dev/null</code></
       </ol>
       <h4>Prevent it</h4>
       <p>Authenticate CI pulls and mirror base images into your own registry.</p>
-      <p class="note">Practise it: <a href="index.html#play/ratelimit">toomanyrequests</a>. Learn it: <a href="index.html#path">Level 14 · Registries and platforms</a>. <a href="index.html#fix/rate-limit">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/ratelimit">toomanyrequests</a>, then take <a href="index.html#path">Level 14 · Registries and platforms</a>. <a href="index.html#fix/rate-limit">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="stale-tag">
       <h3>Running an old version of :latest</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>shop: ok (version 2.3)</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>docker run uses the local image for a tag and never checks the registry for a newer one.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1161,13 +1161,13 @@ docker image inspect &lt;image&gt; --format '{{.RepoDigests}}'</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Deploy immutable version tags or digests, never :latest.</p>
-      <p class="note">Practise it: <a href="index.html#play/stale">Old image, new tag</a>. Learn it: <a href="index.html#path">Level 01 · Images and tags</a>. <a href="index.html#fix/stale-tag">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/stale">Old image, new tag</a>, then take <a href="index.html#path">Level 01 · Images and tags</a>. <a href="index.html#fix/stale-tag">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="platform-mismatch">
       <h3>does not match the detected host platform</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>WARNING: The requested image's platform (linux/arm64/v8) does not match the detected host platform (linux/amd64/v3) and no specific platform was requested</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The image was built for another CPU architecture; it will fail with exec format error.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1182,13 +1182,13 @@ docker image inspect &lt;image&gt; --format '{{.RepoDigests}}'</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Publish multi-platform images from CI with docker buildx.</p>
-      <p class="note">Practise it: <a href="index.html#play/platform">exec format error</a>. Learn it: <a href="index.html#path">Level 14 · Registries and platforms</a>. <a href="index.html#fix/platform-mismatch">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/platform">exec format error</a>, then take <a href="index.html#path">Level 14 · Registries and platforms</a>. <a href="index.html#fix/platform-mismatch">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="pg-incompatible">
       <h3>database files are incompatible with server</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>FATAL:  database files are incompatible with server</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>A new major PostgreSQL version cannot open a data directory made by an older one.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1204,14 +1204,14 @@ docker run --rm -v &lt;volume&gt;:/data alpine:3.20 cat /data/PG_VERSION</code><
       </ol>
       <h4>Prevent it</h4>
       <p>Pin database images to a major version and upgrade them on purpose.</p>
-      <p class="note">Practise it: <a href="index.html#play/pgupgrade">Database files are incompatible</a>. Learn it: <a href="index.html#path">Level 14 · Registries and platforms</a>. <a href="index.html#fix/pg-incompatible">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/pgupgrade">Database files are incompatible</a>, then take <a href="index.html#path">Level 14 · Registries and platforms</a>. <a href="index.html#fix/pg-incompatible">Open in Docker Quest</a>.</p>
     </section>
     <h2 class="section-title">Compose and operations</h2>
     <section class="card fix problem" id="var-not-set">
       <h3>The variable is not set. Defaulting to a blank string</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>WARN[0000] The &quot;DB_PASSWORD&quot; variable is not set. Defaulting to a blank string.</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>Compose found ${X} in the file but neither the shell nor .env defines it.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1227,13 +1227,13 @@ cat .env</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Use ${X:?X must be set} in compose files so a missing value stops the start.</p>
-      <p class="note">Practise it: <a href="index.html#play/composeenv">Compose: variable not set</a>. Learn it: <a href="index.html#path">Level 10 · Compose</a>. <a href="index.html#fix/var-not-set">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/composeenv">Compose: variable not set</a>, then take <a href="index.html#path">Level 10 · Compose</a>. <a href="index.html#fix/var-not-set">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="dependency-failed">
       <h3>dependency failed to start</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>dependency failed to start: container orders-db-1 exited (1)</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>Compose did not start a service because one it depends on exited or never became healthy.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1249,13 +1249,13 @@ docker compose logs &lt;service&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Give every dependency a healthcheck that tests real readiness.</p>
-      <p class="note">Practise it: <a href="index.html#play/composeenv">Compose: variable not set</a> · <a href="index.html#play/composeorder">Compose: started too early</a>. Learn it: <a href="index.html#path">Level 11 · Healthchecks and restarts</a>. <a href="index.html#fix/dependency-failed">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/composeenv">Compose: variable not set</a> · <a href="index.html#play/composeorder">Compose: started too early</a>, then take <a href="index.html#path">Level 11 · Healthchecks and restarts</a>. <a href="index.html#fix/dependency-failed">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="unhealthy">
       <h3>(unhealthy) in docker ps</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Up 5 minutes (unhealthy)</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The container runs, but its healthcheck command fails.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1272,13 +1272,13 @@ docker exec &lt;name&gt; &lt;the check command&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Run the healthcheck command with docker exec before baking it into the image.</p>
-      <p class="note">Practise it: <a href="index.html#play/healthcheck">Unhealthy</a>. Learn it: <a href="index.html#path">Level 11 · Healthchecks and restarts</a>. <a href="index.html#fix/unhealthy">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/healthcheck">Unhealthy</a>, then take <a href="index.html#path">Level 11 · Healthchecks and restarts</a>. <a href="index.html#fix/unhealthy">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="logs-unreadable">
       <h3>configured logging driver does not support reading</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>Error response from daemon: configured logging driver does not support reading</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>docker logs cannot read containers whose logging driver sends logs elsewhere or nowhere.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1293,13 +1293,13 @@ docker exec &lt;name&gt; &lt;the check command&gt;</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Keep a readable local driver with rotation; ship logs from there.</p>
-      <p class="note">Practise it: <a href="index.html#play/nologs">No logs to read</a>. Learn it: <a href="index.html#path">Level 13 · Logs and disk space</a>. <a href="index.html#fix/logs-unreadable">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/nologs">No logs to read</a>, then take <a href="index.html#path">Level 13 · Logs and disk space</a>. <a href="index.html#fix/logs-unreadable">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="no-space">
       <h3>no space left on device</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>failed to copy files: copy file range failed: no space left on device</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The disk holding /var/lib/docker is full: images, build cache, volumes, or logs.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1318,13 +1318,13 @@ docker system df</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Schedule docker builder prune on build hosts and rotate logs.</p>
-      <p class="note">Practise it: <a href="index.html#play/diskfull">No space left on device</a> · <a href="index.html#play/logs">Logs fill the disk</a>. Learn it: <a href="index.html#path">Level 13 · Logs and disk space</a>. <a href="index.html#fix/no-space">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/diskfull">No space left on device</a> · <a href="index.html#play/logs">Logs fill the disk</a>, then take <a href="index.html#path">Level 13 · Logs and disk space</a>. <a href="index.html#fix/no-space">Open in Docker Quest</a>.</p>
     </section>
     <section class="card fix problem" id="logs-disk">
       <h3>Container logs filling the disk</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>/var/lib/docker/containers/&lt;id&gt;/&lt;id&gt;-json.log   14G</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>The default json-file driver keeps every line forever unless told to rotate.</p>
       <h4>Likely causes</h4>
       <ul>
@@ -1340,7 +1340,7 @@ sudo du -sh /var/lib/docker/containers/*</code></pre>
       </ol>
       <h4>Prevent it</h4>
       <p>Set log-opts in /etc/docker/daemon.json so every new container rotates.</p>
-      <p class="note">Practise it: <a href="index.html#play/logs">Logs fill the disk</a>. Learn it: <a href="index.html#path">Level 13 · Logs and disk space</a>. <a href="index.html#fix/logs-disk">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in <a href="index.html#play/logs">Logs fill the disk</a>, then take <a href="index.html#path">Level 13 · Logs and disk space</a>. <a href="index.html#fix/logs-disk">Open in Docker Quest</a>.</p>
     </section>
   </main>
   <footer class="foot">

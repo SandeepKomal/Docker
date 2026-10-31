@@ -23,12 +23,18 @@
         Docker Quest
       </a>
       <nav aria-label="Sections">
-        <a href="#path" data-tab="path">Path</a>
-        <a href="#quiz" data-tab="quiz">Quiz</a>
-        <a href="#xray" data-tab="xray">Dockerfile X-ray</a>
-        <a href="#doctor" data-tab="doctor">Troubleshoot</a>
-        <a href="#cheats" data-tab="cheats">Cheat sheet</a>
-        <a href="#arch" data-tab="arch">Docker arch</a>
+        <div class="mode learn" role="group" aria-label="Learn">
+          <span class="mode-k">Learn</span>
+          <a href="#path" data-tab="path">Path</a>
+          <a href="#quiz" data-tab="quiz">Quiz</a>
+          <a href="#xray" data-tab="xray">Dockerfile X-ray</a>
+          <a href="#arch" data-tab="arch">Docker arch</a>
+        </div>
+        <div class="mode fix" role="group" aria-label="Fix">
+          <span class="mode-k">Fix</span>
+          <a href="#doctor" data-tab="doctor">Troubleshoot</a>
+          <a href="#cheats" data-tab="cheats">Cheat sheet</a>
+        </div>
       </nav>
       <button type="button" class="kbd-btn" id="palette-open" aria-label="Search the site (Ctrl+K)"><span>Search</span><kbd id="palette-key">Ctrl K</kbd></button>
       <a class="gh" id="gh-link" href="#">GitHub</a>
@@ -41,9 +47,19 @@
         <p class="eyebrow">Docker Quest</p>
         <h1>Build it small.<br>Run it safe.</h1>
         <p class="sub">Images, layers, networks and volumes, learned by fixing containers that misbehave. In your browser, with real docker commands and real errors.</p>
-        <div class="ctas">
-          <a class="pill primary" href="#path-title">Start the path</a>
-          <a class="more" href="#pg-title">Try a scenario</a>
+        <div class="doors">
+          <div class="door learn">
+            <p class="door-k">Learning Docker?</p>
+            <h2>Start from zero, step by step.</h2>
+            <p>Levels in order, each with a hands-on incident to fix in your browser.</p>
+            <div class="ctas"><a class="pill primary" href="#path-title">Start the path</a><a class="more" href="#pg-title">Try a scenario</a></div>
+          </div>
+          <div class="door fix">
+            <p class="door-k">Something broken right now?</p>
+            <h2>Paste the error, get the fix.</h2>
+            <p>The cause, the commands to confirm it and the fix, for every common Docker error.</p>
+            <div class="door-search"><input id="door-q" type="search" placeholder="Paste an error, e.g. port is already allocated" aria-label="Paste an error" autocomplete="off"><button type="button" class="pill" id="door-go">Find the fix</button></div>
+          </div>
         </div>
         <div class="stage" id="stage" aria-labelledby="stage-title"></div>
         <div class="stats" id="stats"></div>
@@ -54,9 +70,9 @@
         <div class="bento">
           <a class="tile wide" href="#pg-title"><div><p class="tile-k">Playground</p><h3>A real docker CLI, in your browser.</h3></div><p>Containers that exit, ports that do not answer, images that weigh 1.6 GB, stacks that start in the wrong order.</p></a>
           <a class="tile wide" href="#xray"><div><p class="tile-k">Dockerfile X-ray</p><h3>Every line, explained.</h3></div><p>Paste a Dockerfile: what each line does, what is risky, what is missing.</p></a>
-          <a class="tile" href="#doctor"><div><p class="tile-k">Troubleshoot</p><h3>Paste the error, get the fix.</h3></div></a>
           <a class="tile" href="#quiz"><div><p class="tile-k">Quiz</p><h3>Know why, not just how.</h3></div></a>
           <a class="tile" href="#arch"><div><p class="tile-k">Architecture</p><h3>Client, daemon, containerd, runc.</h3></div></a>
+          <a class="tile" href="#doctor"><div><p class="tile-k">Stuck on an error?</p><h3>Learn why it happens, then practise the fix.</h3></div></a>
         </div>
       </section>
 
@@ -175,8 +191,9 @@ docker builder prune</code></pre>
     </section>
 
     <section id="tab-doctor" class="tab" hidden>
-      <h2>Troubleshooting reference</h2>
-      <p class="lede">Paste the error you see, or pick a symptom. Each answer gives the exact error, what it means, how to confirm it, the fix, how to prevent it, and a scenario to practise it. Every problem has its own link. There is also a <a href="problems.html">plain page of every problem</a>.</p>
+      <p class="mode-banner"><strong>Fix mode.</strong> For when something is broken right now. Learning Docker instead? <a href="#path">Start the path</a>.</p>
+      <h2>Stuck on an error?</h2>
+      <p class="lede">Paste the error you see, or pick a symptom. Each answer explains why it happens, how to confirm it and how to fix and prevent it, then gives you a safe scenario to break and fix it yourself, so you recognise it next time. Every problem has its own link. There is also a <a href="problems.html">plain page of every problem</a>.</p>
       <div class="guide-slot" data-guide="doctor"></div>
       <label class="field">Search problems and error messages
         <input id="doctor-q" type="search" placeholder="Paste an error, or type 137, ENOTFOUND, port..." autocomplete="off">

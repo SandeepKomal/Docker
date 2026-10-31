@@ -384,13 +384,17 @@
     $("#doctor-out").replaceChildren(h("article.card.fix", { id: "fix-" + d.id },
       h("div.fix-head", null, h("h3", null, d.status), copyLink("fix/" + d.id, "problem")),
       h("h4", null, "The error"), h("pre.fix-error", null, h("code", null, d.error)),
-      h("h4", null, "What it means"), h("p", null, d.meaning),
+      h("h4", null, "Why it happens"), h("p", null, d.meaning),
       h("h4", null, "Likely causes"), h("ul", null, d.causes.map((c) => h("li", null, c))),
       h("h4", null, "Confirm"), h("pre", null, h("code", null, d.commands.join("\n"))),
       h("h4", null, "Fix"), h("ol", null, d.fix.map((f) => h("li", null, /^(docker|sudo|echo|chmod|newgrp|cat|ls|df) /.test(f) ? h("code", null, f) : f))),
       h("h4", null, "Prevent it"), h("p", null, d.prevent),
-      practiseRow(d.scenarios, "Practise it in the playground:"),
-      h("p.note", null, "Learn it: ", h("a", { href: "#path", onclick: () => setTimeout(() => scrollToEl($("#" + stageId(lv.stage)))) }, `Level ${lv.id} · ${lv.title}`))));
+      // Fixing is the way in; the point is to learn it, so every answer ends in practice.
+      h("div.learn-it", null,
+        h("h4", null, "Now learn it"),
+        h("p", null, "Break this yourself in a safe playground and fix it. Doing it once is what makes you recognise it next time."),
+        practiseRow(d.scenarios, "Practise:"),
+        h("p.note", null, "Then the level that teaches it: ", h("a", { href: "#path", onclick: (e) => { e.preventDefault(); goTab("path", () => scrollToEl($("#" + stageId(lv.stage)))); } }, `Level ${lv.id} · ${lv.title}`)))));
     if (!fromHash) scrollToEl($("#doctor-out"));
   }
 
@@ -510,7 +514,7 @@
     { label: "Your path", kind: "Section", run: () => goTab("path", () => $("#path-title").scrollIntoView()) },
     { label: "Exam: random questions from every level", kind: "Quiz", run: () => goTab("quiz", () => { $("#quiz-level").value = "exam"; renderQuiz(); }) },
     { label: "Dockerfile X-ray", kind: "Section", run: () => goTab("xray") },
-    { label: "Troubleshooting reference", kind: "Section", run: () => goTab("doctor") },
+    { label: "Fix: troubleshoot an error", kind: "Section", run: () => goTab("doctor") },
     { label: "Cheat sheet", kind: "Section", run: () => goTab("cheats", () => $("#cheat-q").focus()) },
     { label: "Docker architecture: every component explained", kind: "Section", run: () => goTab("arch") },
     ...Q.levels.map((lv) => ({ label: `${lv.id} · ${lv.title}`, hint: lv.topic, kind: "Level", run: () => goTab("path", () => scrollToEl(document.getElementById(stageId(lv.stage)))) })),
@@ -586,6 +590,10 @@
   $("#doctor-list").before(h("div.doctor-practise", { id: "doctor-best", "aria-live": "polite" }));
   $("#doctor-list").after(h("p.muted", { id: "doctor-none", hidden: true }, "No problem matches. Paste the error line itself, or try an exit code (137), a word (denied, refused) or a thing (port, volume)."));
   $("#doctor-q").addEventListener("input", renderDoctorList);
+  // The home page's "Something broken?" box hands the pasted error to Troubleshoot.
+  const doorGo = () => { $("#doctor-q").value = $("#door-q").value; goTab("doctor", () => { renderDoctorList(); $("#doctor-q").focus(); }); };
+  $("#door-go").addEventListener("click", doorGo);
+  $("#door-q").addEventListener("keydown", (e) => { if (e.key === "Enter") doorGo(); });
   $("#cheat-q").addEventListener("input", renderCheats);
   renderFill();
   $("#cheat-fill-box").open = matchMedia("(min-width: 721px)").matches || Object.keys(fills).length > 0;

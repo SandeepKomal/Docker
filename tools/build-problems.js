@@ -29,7 +29,7 @@ function build() {
       <h3>${esc(d.status)}</h3>
       <h4>The error</h4>
       <pre class="fix-error"><code>${esc(d.error)}</code></pre>
-      <h4>What it means</h4>
+      <h4>Why it happens</h4>
       <p>${esc(d.meaning)}</p>
       <h4>Likely causes</h4>
       <ul>
@@ -43,7 +43,7 @@ ${d.fix.map((f) => `        <li>${esc(f)}</li>`).join("\n")}
       </ol>
       <h4>Prevent it</h4>
       <p>${esc(d.prevent)}</p>
-      <p class="note">Practise it: ${d.scenarios.map((id) => `<a href="index.html#play/${id}">${esc(titles[id])}</a>`).join(" · ")}. Learn it: <a href="index.html#path">Level ${lv.id} · ${esc(lv.title)}</a>. <a href="index.html#fix/${d.id}">Open in Docker Quest</a>.</p>
+      <p class="note"><strong>Now learn it:</strong> break and fix it yourself in ${d.scenarios.map((id) => `<a href="index.html#play/${id}">${esc(titles[id])}</a>`).join(" · ")}, then take <a href="index.html#path">Level ${lv.id} · ${esc(lv.title)}</a>. <a href="index.html#fix/${d.id}">Open in Docker Quest</a>.</p>
     </section>`;
   };
   return `<!doctype html>
@@ -67,7 +67,7 @@ ${d.fix.map((f) => `        <li>${esc(f)}</li>`).join("\n")}
   <main class="wrap problems">
     <p class="eyebrow"><a href="index.html">Docker Quest</a></p>
     <h1>Docker problems and fixes</h1>
-    <p class="lede">${Q.doctor.length} problems people meet with Docker, each with the exact error, what it means, how to confirm it, the fix and how to prevent it. Practise each one in the <a href="index.html#pg-title">browser playground</a>.</p>
+    <p class="lede">${Q.doctor.length} problems people meet with Docker, each with the exact error, why it happens, how to confirm it, the fix and how to prevent it. Then learn it for good: break and fix each one yourself in the <a href="index.html#pg-title">browser playground</a>.</p>
     <nav class="card problems-index" aria-label="Problems">
 ${Q.doctorGroups.map(([group, ids]) => `      <h2>${esc(group)}</h2>
       <ul>
