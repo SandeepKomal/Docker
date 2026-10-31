@@ -1,5 +1,5 @@
 // Learning loop: continue where you left off, an on-call shift against the clock,
-// a daily streak, and a "put the lab in order" check in every level.
+// a score and an activity graph, and a "put the lab in order" check in every level.
 // Everything stays in this browser under the site's own storage prefix.
 "use strict";
 (function () {
@@ -12,20 +12,54 @@
   const today = () => day(new Date());
   const clock = (ms) => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 
-  // Days with any learning activity, newest last; the streak counts back from today or yesterday.
+  // Learning actions per local day, {date: count}: the streak and the activity graph read it.
   function active() {
-    const days = get("days", []);
-    if (days[days.length - 1] !== today()) set("days", [...days, today()].slice(-60));
+    const log = get("log", {});
+    log[today()] = (log[today()] || 0) + 1;
+    const cut = new Date();
+    cut.setDate(cut.getDate() - 371);
+    for (const k of Object.keys(log)) if (k < day(cut)) delete log[k];
+    set("log", log);
     render();
   }
-  function streak() {
-    const days = new Set(get("days", []));
+  function streaks() {
+    const log = get("log", {});
     const d = new Date();
-    if (!days.has(today())) d.setDate(d.getDate() - 1);
-    let n = 0;
-    while (days.has(day(d))) { n++; d.setDate(d.getDate() - 1); }
-    return n;
+    if (!log[today()]) d.setDate(d.getDate() - 1);
+    let now = 0;
+    while (log[day(d)]) { now++; d.setDate(d.getDate() - 1); }
+    let best = 0, run = 0, prev;
+    for (const k of Object.keys(log).sort()) {
+      const t = new Date(k + "T12:00");
+      run = prev && (t - prev) / 864e5 < 1.5 ? run + 1 : 1;
+      best = Math.max(best, run);
+      prev = t;
+    }
+    return { now, best };
   }
+
+  // Points come from what is already saved, so they never drift from real progress.
+  const RANKS = [[0, "Getting started"], [50, "Apprentice"], [200, "Practitioner"], [500, "Responder"], [900, "On-call ready"]];
+  function score() {
+    const quiz = Object.values(get("quiz", {}));
+    const s = {
+      solved: get("pg-solved", []).length, levels: get("done", []).length, passed: quiz.filter((p) => p >= 80).length,
+      shifts: get("shifts", { count: 0 }).count, orders: get("orders", []).length
+    };
+    s.total = s.solved * 10 + s.levels * 20 + quiz.reduce((a, p) => a + Math.round(p / 10), 0) + s.shifts * 5 + s.orders * 5;
+    return s;
+  }
+  // The session starts with the first page view in this tab.
+  const session = (() => {
+    try {
+      const k = PREFIX + "session";
+      const was = JSON.parse(sessionStorage.getItem(k));
+      if (was) return was;
+      const now = { at: Date.now(), from: score().total };
+      sessionStorage.setItem(k, JSON.stringify(now));
+      return now;
+    } catch { return { at: Date.now(), from: score().total }; }
+  })();
 
   // --- on-call shift: a random unsolved incident, a pager and a timer ---------
   let shift = get("shift", null);
@@ -84,23 +118,52 @@
       h("p", null, next.topic),
       h("a.pill", { href: "#lv-" + next.id, onclick: (e) => { e.preventDefault(); openLevel(next.id); } }, done.size ? "Continue" : "Start level " + next.id));
   }
-  function streakCard() {
-    const n = streak();
-    const solved = get("pg-solved", []).length;
-    const week = new Set(get("days", []));
-    const d = new Date();
-    d.setDate(d.getDate() - 6);
-    const dots = [];
-    for (let i = 0; i < 7; i++, d.setDate(d.getDate() + 1)) {
-      const on = week.has(day(d));
-      dots.push(h("span.eng-day" + (on ? ".on" : ""), { title: d.toLocaleDateString(undefined, { weekday: "long" }) + (on ? ": practised" : "") }));
-    }
+  function scoreCard() {
+    const sc = score();
+    const i = RANKS.findLastIndex(([min]) => sc.total >= min);
+    const next = RANKS[i + 1];
+    const bar = h("span.eng-bar-fill");
+    bar.style.width = next ? ((sc.total - RANKS[i][0]) / (next[0] - RANKS[i][0]) * 100) + "%" : "100%";
+    const gained = sc.total - session.from;
     return h("div.eng-card", null,
-      h("p.eng-k", null, "Your streak"),
-      h("h3", null, n ? `${n} day${n > 1 ? "s" : ""} in a row` : "Start a streak today"),
-      h("div.eng-week", { role: "img", "aria-label": `Practised on ${dots.filter((x) => x.classList.contains("on")).length} of the last 7 days` }, dots),
-      h("p", null, `${solved} incident${solved === 1 ? "" : "s"} fixed so far`));
+      h("p.eng-k", null, "Your score"),
+      h("p.eng-score", null, String(sc.total), h("span", null, RANKS[i][1])),
+      h("span.eng-bar", { role: "progressbar", "aria-label": next ? `Progress to ${next[1]}` : "Top rank", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(Math.round(parseFloat(bar.style.width))) }, bar),
+      h("p", null, next ? `${next[0] - sc.total} points to ${next[1]}` : "Top rank. Keep the streak going."),
+      h("p.eng-session", null, `This session: ${gained > 0 ? "+" + gained : "0"} points · ${Math.max(1, Math.round((Date.now() - session.at) / 60000))} min`));
   }
+
+  // --- scoreboard: a year of practice, like a contribution graph --------------
+  function board() {
+    const log = get("log", {});
+    const sc = score();
+    const st = streaks();
+    const weeks = 53;
+    const d = new Date();
+    d.setDate(d.getDate() - d.getDay() - (weeks - 1) * 7);
+    const cells = [];
+    let total = 0;
+    for (let i = 0; i < weeks * 7; i++, d.setDate(d.getDate() + 1)) {
+      const n = d > new Date() ? -1 : log[day(d)] || 0;
+      total += Math.max(n, 0);
+      cells.push(h("span.eng-cell.l" + (n < 0 ? "x" : Math.min(4, Math.ceil(n / 2))),
+        { title: n < 0 ? "" : `${n || "No"} learning action${n === 1 ? "" : "s"} on ${d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}` }));
+    }
+    const shifts = get("shifts", { count: 0, best: null });
+    const stat = (v, label) => h("div", null, h("b", null, v), h("span", null, label));
+    const sim = window.DQPlayground.scenarios.length;
+    return h("div.eng-board", null,
+      h("div.eng-board-head", null, h("h3", null, `${total} learning action${total === 1 ? "" : "s"} in the last year`),
+        h("span.eng-legend", { "aria-hidden": "true" }, "Less", [0, 1, 2, 3, 4].map((l) => h("span.eng-cell.l" + l)), "More")),
+      h("div.eng-graph-wrap", { tabindex: "0", role: "region", "aria-label": "Activity graph, scrolls sideways" }, h("div.eng-graph", { role: "img", "aria-label": `Activity graph: ${total} learning actions in the last year, current streak ${st.now} days` }, cells)),
+      h("div.eng-stats", null,
+        stat(`${sc.solved}/${sim}`, "incidents fixed"),
+        stat(`${sc.levels}/${Q.levels.length}`, "levels done"),
+        stat(`${sc.passed}/${Q.levels.length}`, "quizzes passed"),
+        stat(String(shifts.count), shifts.best ? `shifts · best ${clock(shifts.best)}` : "on-call shifts"),
+        stat(`${st.now}d`, `streak · best ${st.best}d`)));
+  }
+
   function openLevel(id) {
     const li = document.getElementById("lv-" + id);
     if (!li) return;
@@ -111,7 +174,10 @@
 
   function render() {
     const box = document.getElementById("engage");
-    if (box && window.DQPlayground) box.replaceChildren(continueCard(), shiftCard(), streakCard());
+    if (!box || !window.DQPlayground) return;
+    box.replaceChildren(continueCard(), shiftCard(), scoreCard(), board());
+    const wrap = box.querySelector(".eng-graph-wrap");
+    wrap.scrollLeft = wrap.scrollWidth; // newest week in view on narrow screens
   }
 
   // --- put the lab in order before seeing it ---------------------------------
@@ -141,7 +207,11 @@
     const check = () => {
       const right = now.filter((c, i) => c === want[i]).length;
       [...list.children].forEach((li, i) => { li.className = now[i] === want[i] ? "ok" : "off"; });
-      if (right === want.length) { reveal("Right order. Now run it on your machine."); active(); }
+      if (right === want.length) {
+        set("orders", [...new Set([...get("orders", []), lv.id])]);
+        reveal("Right order. +5 points. Now run it on your machine.");
+        active();
+      }
       else msg.textContent = `${right} of ${want.length} in place. What does each step need first?`;
     };
     draw();
