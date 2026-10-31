@@ -658,6 +658,6 @@ kbd { font: 500 .72rem/1 "SF Mono", ui-monospace, Menlo, Consolas, monospace; le
 /* DevOps Nimbus brand: the loop mark in the header and footer, the track's own logo in the eyebrow. */
 .brand img.mark { width: 37px; }
 .foot-brand .brand img.mark { width: 47px; }
-.brand-track { color: var(--muted); font-weight: 500; padding-left: 8px; border-left: 1px solid var(--line); }
+.brand-track { color: var(--accent); font-weight: 600; padding-left: 8px; border-left: 1px solid var(--line); }
 .eyebrow { display: inline-flex; align-items: center; gap: 8px; }
 .eyebrow-logo { width: 20px; height: 20px; }
