@@ -94,6 +94,9 @@ h1, h2, h3, h4 { letter-spacing: -.03em; line-height: 1.1; }
 .top nav a { color: var(--text); opacity: .8; padding: 6px 12px; border-radius: 99px; white-space: nowrap; font-size: .82rem; transition: opacity .2s, background .2s; }
 .top nav a:hover { opacity: 1; text-decoration: none; }
 .top nav a[aria-current="page"] { opacity: 1; background: var(--code-bg); font-weight: 500; }
+/* Learning sections first; the reference sits after a divider, quieter. */
+.top nav .nav-sep { flex: none; width: 1px; margin: 7px 8px; background: var(--hair); }
+.top nav a.ref { opacity: .62; }
 .gh { display: inline-flex; align-items: center; font-size: .8rem; font-weight: 500; color: var(--on-accent); background: var(--accent); border-radius: 99px; padding: 6px 14px; transition: background .2s; }
 .gh:hover { background: var(--accent-hover); text-decoration: none; }
 
@@ -287,6 +290,9 @@ select:focus, input[type="search"]:focus { border-color: var(--accent); outline:
 #doctor-out ul { margin: 0; padding-left: 20px; }
 .doctor-practise { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
 .doctor-practise > span { margin-right: 4px; }
+.learn-it { margin-top: 24px; padding: 18px 20px; border-radius: 14px; background: var(--accent-soft, var(--code-bg)); border: 1px solid var(--hair); }
+#doctor-out .learn-it h4 { margin-top: 0; color: var(--text); }
+.learn-it > p { margin: 4px 0 0; }
 
 /* Cheat sheet */
 .group { font-size: 1rem; color: var(--muted); margin: 28px 0 10px; font-weight: 600; }
@@ -519,6 +525,7 @@ kbd { font: 500 .72rem/1 "SF Mono", ui-monospace, Menlo, Consolas, monospace; le
   .brand { font-size: .95rem; flex: 1; }
   .top nav { order: 3; flex-basis: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; margin: 0 -8px; }
   .top nav a { padding: 6px 4px; text-align: center; }
+  .top nav .nav-sep { display: none; }
   .kbd-btn span { display: none; }
   .kbd-btn { padding: 5px; }
   .hero { padding: 48px 0 8px; }
