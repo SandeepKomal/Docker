@@ -91,7 +91,7 @@ h1, h2, h3, h4 { letter-spacing: -.03em; line-height: 1.1; }
 .brand:hover { text-decoration: none; }
 .brand img { display: block; width: 22px; height: 22px; }
 .top nav { display: flex; gap: 2px; overflow-x: auto; flex: 1; justify-content: center; scrollbar-width: none; }
-.top nav a { color: var(--text); opacity: .8; padding: 6px 12px; border-radius: 99px; white-space: nowrap; font-size: .82rem; transition: opacity .2s, background .2s; }
+.top nav a { color: var(--text); opacity: .8; padding: 6px 10px; border-radius: 99px; white-space: nowrap; font-size: .82rem; transition: opacity .2s, background .2s; }
 .top nav a:hover { opacity: 1; text-decoration: none; }
 .top nav a[aria-current="page"] { opacity: 1; background: var(--code-bg); font-weight: 500; }
 /* Two modes: Learn (the course) and Fix (the reference for something broken now). */
@@ -113,8 +113,6 @@ h1, h2, h3, h4 { letter-spacing: -.03em; line-height: 1.1; }
 .door-search input { flex: 1; min-width: 0; font: inherit; font-size: .95rem; padding: 10px 14px; border-radius: 99px; border: 1px solid var(--hair); background: var(--surface, #fff); color: var(--text); }
 .mode-banner { margin: 0 0 18px; padding: 12px 16px; border-radius: 12px; background: var(--warn-soft); color: var(--text); font-size: .95rem; }
 .mode-banner strong { color: var(--warn-text); }
-.gh { display: inline-flex; align-items: center; font-size: .8rem; font-weight: 500; color: var(--on-accent); background: var(--accent); border-radius: 99px; padding: 6px 14px; transition: background .2s; }
-.gh:hover { background: var(--accent-hover); text-decoration: none; }
 
 main { padding-top: 8px; padding-bottom: 64px; min-height: 70vh; }
 .tab > h2 { font-size: clamp(2rem, 4.5vw, 3rem); font-weight: 700; margin: 48px 0 14px; }
@@ -517,7 +515,7 @@ kbd { font: 500 .72rem/1 "SF Mono", ui-monospace, Menlo, Consolas, monospace; le
 .opt.wrong { animation: dq-shake .36s var(--ease); }
 .feedback.ok, .feedback.bad { animation: dq-in var(--dur) var(--ease) both; }
 .copy, .chip, .pg-scn, .pg-ctr { transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
-.copy:active, .chip:active, .pg-scn:active, .pg-ctr:active, .gh:active, .kbd-btn:active { transform: scale(.96); }
+.copy:active, .chip:active, .pg-scn:active, .pg-ctr:active, .kbd-btn:active { transform: scale(.96); }
 
 @media (max-width: 860px) {
   .bento { grid-template-columns: minmax(0, 1fr); }
@@ -533,15 +531,16 @@ kbd { font: 500 .72rem/1 "SF Mono", ui-monospace, Menlo, Consolas, monospace; le
   .xray { grid-template-columns: minmax(0, 1fr); }
   #xray-note { position: static; }
 }
+/* Brand and search on the first row, the Learn and Fix menus centred on the second. */
+@media (max-width: 1024px) {
+  .top-inner { gap: 6px 10px; flex-wrap: wrap; height: auto; padding-top: 8px; padding-bottom: 6px; }
+  .brand { flex: 1; }
+  .top nav { order: 3; flex-basis: 100%; flex-wrap: wrap; justify-content: center; gap: 6px; }
+}
 @media (max-width: 720px) {
   body { font-size: 16px; }
   .wrap { padding: 0 16px; }
-  .top-inner { gap: 6px 10px; flex-wrap: wrap; height: auto; padding-top: 8px; padding-bottom: 6px; }
-  .gh { display: none; }
-  .brand { font-size: .95rem; flex: 1; }
-  .top nav { order: 3; flex-basis: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; margin: 0 -8px; }
   .top nav a { padding: 6px 4px; text-align: center; }
-  .top nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
   .mode { flex-wrap: wrap; justify-content: center; }
   .mode-k { padding: 0 4px 0 8px; }
   .doors { grid-template-columns: 1fr; }
