@@ -3,7 +3,7 @@
 // Everything stays in this browser under the site's own storage prefix.
 "use strict";
 (function () {
-  const Q = window.QUEST;
+  const Q = window.TRACK;
   const { h } = window.DQUI;
   const PREFIX = "dq-docker:";
   const get = (k, d) => { try { return JSON.parse(localStorage.getItem(PREFIX + k)) ?? d; } catch { return d; } };

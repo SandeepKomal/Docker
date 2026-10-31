@@ -2,7 +2,7 @@
 "use strict";
 
 (function () {
-  const Q = window.QUEST;
+  const Q = window.TRACK;
   const $ = (sel) => document.querySelector(sel);
   const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
   const scrollToEl = (el) => el.scrollIntoView({ block: "start", behavior: still() ? "auto" : "smooth" });
@@ -127,7 +127,7 @@
       draw(on ? Q.signature.after : Q.signature.before);
     });
     $("#stage").replaceChildren(
-      h("div.stage-bar", null, h("div", null, h("strong", { id: "stage-title" }, "quest/shop"), h("div", null, "Each bar is a layer, as wide as what it adds.")), toggle),
+      h("div.stage-bar", null, h("div", null, h("strong", { id: "stage-title" }, "nimbus/shop"), h("div", null, "Each bar is a layer, as wide as what it adds.")), toggle),
       list, h("div.total", null, h("span", null, "Image size"), total),
       h("a.stage-try", { href: "#play/bigimage" }, "Shrink it yourself in the playground"));
     draw(Q.signature.before);
@@ -204,7 +204,7 @@
   // --- quiz ----------------------------------------------------------------
 
   const EXAM_SIZE = 20;
-  const questionsFor = (id) => (window.QUEST_QUIZ[id] || []).map((item) => ({ ...item, level: id }));
+  const questionsFor = (id) => (window.TRACK_QUIZ[id] || []).map((item) => ({ ...item, level: id }));
   function shuffle(list) {
     const a = [...list];
     for (let i = a.length - 1; i > 0; i--) {

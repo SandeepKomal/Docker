@@ -1,4 +1,4 @@
-/* Docker Quest site.
+/* DevOps Nimbus Docker site.
    Calm, product-page styling: system font, generous space, one accent. */
 :root {
   --bg: #f5f5f7;
@@ -655,3 +655,10 @@ kbd { font: 500 .72rem/1 "SF Mono", ui-monospace, Menlo, Consolas, monospace; le
 .eng-moves button:disabled { opacity: .35; cursor: default; }
 .eng-msg { margin: 0; font-size: .9rem; color: var(--muted); }
 @media (max-width: 860px) { .engage { grid-template-columns: 1fr; } .eng-panels, .eng-stats { grid-template-columns: 1fr 1fr; } .eng-panels { grid-template-columns: 1fr; } .eng-up:nth-child(-n+60), .eng-90 { display: none; } .eng-30 { display: inline; } .eng-uptime { height: 64px; gap: 3px; } .eng-stats div:last-child { grid-column: 1 / -1; } }
+
+/* DevOps Nimbus brand: the loop mark in the header and footer, the track's own logo in the eyebrow. */
+.brand img.mark { width: 37px; }
+.foot-brand .brand img.mark { width: 47px; }
+.brand-track { color: var(--muted); font-weight: 500; padding-left: 8px; border-left: 1px solid var(--line); }
+.eyebrow { display: inline-flex; align-items: center; gap: 8px; }
+.eyebrow-logo { width: 20px; height: 20px; }

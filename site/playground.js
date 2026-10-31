@@ -2274,15 +2274,15 @@
 
   // Practice findings for the simulated scanner. The IDs are invented, not real CVEs.
   const VULNS = {
-    "node:22": [["QUEST-2026-0101", "CRITICAL", "openssl", "3.0.14-1~deb12u2", "3.0.15-1~deb12u1"], ["QUEST-2026-0102", "CRITICAL", "libexpat1", "2.5.0-1", "2.5.0-1+deb12u1"],
-      ["QUEST-2026-0110", "HIGH", "curl", "7.88.1-10+deb12u7", "7.88.1-10+deb12u8"], ["QUEST-2026-0111", "HIGH", "imagemagick", "8:6.9.11.60+dfsg-1.6", null],
-      ["QUEST-2026-0112", "HIGH", "git", "1:2.39.5-0+deb12u1", null], ["QUEST-2026-0113", "HIGH", "python3.11", "3.11.2-6", "3.11.2-6+deb12u4"], ["QUEST-2026-0120", "MEDIUM", "perl", "5.36.0-7+deb12u1", null]],
-    "node:22-slim": [["QUEST-2026-0120", "MEDIUM", "perl-base", "5.36.0-7+deb12u1", null], ["QUEST-2026-0130", "LOW", "libc6", "2.36-9+deb12u9", null]],
-    "node:22-alpine": [["QUEST-2026-0140", "LOW", "busybox", "1.36.1-r29", null]],
-    "nginx:1.27": [["QUEST-2026-0121", "MEDIUM", "libxml2", "2.9.14+dfsg-1.3~deb12u1", null]],
-    "redis:7.4": [["QUEST-2026-0131", "LOW", "libc6", "2.36-9+deb12u9", null]],
-    "postgres:17": [["QUEST-2026-0122", "MEDIUM", "libldap-2.5-0", "2.5.13+dfsg-5", null]],
-    "postgres:16": [["QUEST-2026-0122", "MEDIUM", "libldap-2.5-0", "2.5.13+dfsg-5", null]]
+    "node:22": [["TRACK-2026-0101", "CRITICAL", "openssl", "3.0.14-1~deb12u2", "3.0.15-1~deb12u1"], ["TRACK-2026-0102", "CRITICAL", "libexpat1", "2.5.0-1", "2.5.0-1+deb12u1"],
+      ["TRACK-2026-0110", "HIGH", "curl", "7.88.1-10+deb12u7", "7.88.1-10+deb12u8"], ["TRACK-2026-0111", "HIGH", "imagemagick", "8:6.9.11.60+dfsg-1.6", null],
+      ["TRACK-2026-0112", "HIGH", "git", "1:2.39.5-0+deb12u1", null], ["TRACK-2026-0113", "HIGH", "python3.11", "3.11.2-6", "3.11.2-6+deb12u4"], ["TRACK-2026-0120", "MEDIUM", "perl", "5.36.0-7+deb12u1", null]],
+    "node:22-slim": [["TRACK-2026-0120", "MEDIUM", "perl-base", "5.36.0-7+deb12u1", null], ["TRACK-2026-0130", "LOW", "libc6", "2.36-9+deb12u9", null]],
+    "node:22-alpine": [["TRACK-2026-0140", "LOW", "busybox", "1.36.1-r29", null]],
+    "nginx:1.27": [["TRACK-2026-0121", "MEDIUM", "libxml2", "2.9.14+dfsg-1.3~deb12u1", null]],
+    "redis:7.4": [["TRACK-2026-0131", "LOW", "libc6", "2.36-9+deb12u9", null]],
+    "postgres:17": [["TRACK-2026-0122", "MEDIUM", "libldap-2.5-0", "2.5.13+dfsg-5", null]],
+    "postgres:16": [["TRACK-2026-0122", "MEDIUM", "libldap-2.5-0", "2.5.13+dfsg-5", null]]
   };
   const SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
   // An apt-get upgrade in the image removes the findings that have a fixed version.
@@ -2836,7 +2836,7 @@
   const shopFiles = (dockerfile, ignore, hostModules) => project(`${HOME}/shop`, {
     Dockerfile: file(dockerfile), ...(ignore ? { ".dockerignore": file(ignore) } : {}),
     "package.json": pkg("shop", ["express"], ["eslint", "jest", "nodemon"], SHOP_DEPS), "package-lock.json": blob(88 * kB),
-    "server.js": file(SHOP_SERVER, { app: "shop" }), "README.md": file("# shop\n\nThe storefront. Run it with: docker build -t quest/shop . && docker run -p 3000:3000 quest/shop\n"),
+    "server.js": file(SHOP_SERVER, { app: "shop" }), "README.md": file("# shop\n\nThe storefront. Run it with: docker build -t nimbus/shop . && docker run -p 3000:3000 nimbus/shop\n"),
     public: dirBlob(1.3 * MB), ".git": dirBlob(96 * MB), ...(hostModules ? { node_modules: dirBlob(210 * MB), logs: dirBlob(3.1 * MB), ".env": file("# local settings for development; never copy into an image\nSHOP_DB_HOST=localhost\nSHOP_DB_USER=shop\n") } : {})
   });
   const BIG_DOCKERFILE = 'FROM node:22\nWORKDIR /app\nCOPY . .\nRUN npm ci\nCMD ["node", "server.js"]\n';
@@ -2845,7 +2845,7 @@
 
   const byImage = (e, repo) => e.containers.filter((c) => (e.tagsOf(e.images[c.imageId]) || []).some((t) => t.startsWith(repo + ":")));
   const web = (e, port) => { const r = e.http(null, `localhost:${port}`); return { ok: r.code === 0, text: r.code === 0 ? `answers (${r.app})` : r.text.replace(/^curl: \(\d+\) /, "") }; };
-  const newestShop = (e) => Object.values(e.images).filter((i) => i.built && e.tagsOf(i).some((t) => t.startsWith("quest/shop:"))).sort((a, b) => b.created - a.created)[0];
+  const newestShop = (e) => Object.values(e.images).filter((i) => i.built && e.tagsOf(i).some((t) => t.startsWith("nimbus/shop:"))).sort((a, b) => b.created - a.created)[0];
 
   const SCENARIOS = [
     {
@@ -2886,7 +2886,7 @@
       goal: "Let api reach cache by its name, on a user-defined network.",
       done: "api reaches cache by name.",
       files: service(`${HOME}/api`, "api.js", "api", "node", 8080, ["ioredis"]),
-      setup: ["docker pull redis:7.4", `cd ${HOME}/api`, "docker build -t quest/api:1.0 .", `cd ${HOME}`, 120, "docker run -d --name cache redis:7.4", "docker run -d --name api -p 8080:8080 quest/api:1.0", 2],
+      setup: ["docker pull redis:7.4", `cd ${HOME}/api`, "docker build -t nimbus/api:1.0 .", `cd ${HOME}`, 120, "docker run -d --name cache redis:7.4", "docker run -d --name api -p 8080:8080 nimbus/api:1.0", 2],
       won: (e) => { const c = e.container("api"); return Boolean(c && c.state === "running" && c.proc.via === "dns" && web(e, 8080).ok); },
       check: (e) => {
         const c = e.container("api");
@@ -2907,13 +2907,13 @@
       goal: "Keep /home/dev/shop mounted at /app and get the shop answering on localhost:3000.",
       done: "The shop answers, with your folder still mounted.",
       files: shopFiles(DEV_DOCKERFILE, NODE_IGNORE, false),
-      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", 30, `docker run -d --name shop -p 3000:3000 -v ${HOME}/shop:/app quest/shop:1.0`, 1],
-      won: (e) => web(e, 3000).ok && byImage(e, "quest/shop").some((c) => c.state === "running" && c.mounts.some((m) => m.type === "bind" && m.source === `${HOME}/shop` && m.dest === "/app")),
+      setup: [`cd ${HOME}/shop`, "docker build -t nimbus/shop:1.0 .", 30, `docker run -d --name shop -p 3000:3000 -v ${HOME}/shop:/app nimbus/shop:1.0`, 1],
+      won: (e) => web(e, 3000).ok && byImage(e, "nimbus/shop").some((c) => c.state === "running" && c.mounts.some((m) => m.type === "bind" && m.source === `${HOME}/shop` && m.dest === "/app")),
       check: (e) => ({ label: "curl localhost:3000", ...web(e, 3000) }),
       hints: [
-        "docker logs shop: the app cannot find express. Yet the image installed it: docker run --rm quest/shop:1.0 ls /app shows node_modules.",
+        "docker logs shop: the app cannot find express. Yet the image installed it: docker run --rm nimbus/shop:1.0 ls /app shows node_modules.",
         "The bind mount lays your folder over /app, and your folder has no node_modules (ls). A mount hides whatever the image had at that path.",
-        "Keep the bind mount and give node_modules its own volume, which Docker fills from the image: docker rm shop && docker run -d --name shop -p 3000:3000 -v /home/dev/shop:/app -v /app/node_modules quest/shop:1.0"
+        "Keep the bind mount and give node_modules its own volume, which Docker fills from the image: docker rm shop && docker run -d --name shop -p 3000:3000 -v /home/dev/shop:/app -v /app/node_modules nimbus/shop:1.0"
       ],
       lesson: "A mount replaces what the image has at that path. A named or anonymous volume on the inner path brings the image's files back, because Docker copies them into an empty volume.",
       tries: ["docker ps -a", "docker logs shop", "ls -a"]
@@ -2924,48 +2924,48 @@
       goal: "Run uploader as its non-root user, writing to /srv/uploads, without making the folder writable by everyone.",
       done: "uploader writes to /srv/uploads as a non-root user.",
       files: { ...service(`${HOME}/uploader`, "uploader.js", "uploader", "app", 8080, ["busboy"]), "/srv/uploads": D() },
-      setup: [`cd ${HOME}/uploader`, "docker build -t quest/uploader:1.0 .", `cd ${HOME}`, 60, "docker run -d --name uploader -p 8080:8080 -v /srv/uploads:/data/uploads quest/uploader:1.0", 1],
-      won: (e) => byImage(e, "quest/uploader").some((c) => c.state === "running" && e.userOf(c).uid !== 0 && c.mounts.some((m) => m.source === "/srv/uploads" && m.dest === "/data/uploads")) && !(e.host["/srv/uploads"].mode & 0o002),
+      setup: [`cd ${HOME}/uploader`, "docker build -t nimbus/uploader:1.0 .", `cd ${HOME}`, 60, "docker run -d --name uploader -p 8080:8080 -v /srv/uploads:/data/uploads nimbus/uploader:1.0", 1],
+      won: (e) => byImage(e, "nimbus/uploader").some((c) => c.state === "running" && e.userOf(c).uid !== 0 && c.mounts.some((m) => m.source === "/srv/uploads" && m.dest === "/data/uploads")) && !(e.host["/srv/uploads"].mode & 0o002),
       check: (e) => {
-        const c = byImage(e, "quest/uploader").find((x) => x.state === "running") || byImage(e, "quest/uploader")[0];
+        const c = byImage(e, "nimbus/uploader").find((x) => x.state === "running") || byImage(e, "nimbus/uploader")[0];
         const open = e.host["/srv/uploads"] && e.host["/srv/uploads"].mode & 0o002;
         const text = !c ? "no uploader container" : c.state !== "running" ? statusOf(e, c) : e.userOf(c).uid === 0 ? "running as root" : open ? "folder writable by everyone" : `writing as uid ${e.userOf(c).uid}`;
         return { label: "uploader → /srv/uploads", text };
       },
       hints: [
-        "docker logs uploader: EACCES on /data/uploads. Who does the app run as? docker run --rm quest/uploader:1.0 id",
+        "docker logs uploader: EACCES on /data/uploads. Who does the app run as? docker run --rm nimbus/uploader:1.0 id",
         "The app is uid 10001. ls -ln /srv shows uploads owned by uid 0 with mode drwxr-xr-x: only root may write. A bind mount keeps the host's owner and mode, and the host has no user called app.",
         "Give the folder to the app's uid, then start the container again: sudo chown -R 10001:10001 /srv/uploads && docker start uploader"
       ],
       lesson: "Bind mounts keep host ownership, matched by number, not by name. Match the folder's owner to the container's UID instead of running as root or opening the folder to everyone.",
-      tries: ["docker logs uploader", "ls -ln /srv", "docker run --rm quest/uploader:1.0 id"]
+      tries: ["docker logs uploader", "ls -ln /srv", "docker run --rm nimbus/uploader:1.0 id"]
     },
     {
       id: "bigimage", title: "1.6 GB image", level: "05",
       story: "The shop image takes minutes to push and to start on new servers. docker images says it is 1.6 GB, for a 60-line web server.",
-      goal: "Build quest/shop under 250 MB, with no .git or .env inside, and still working. Keep both files in your project.",
-      done: "quest/shop is small, clean and still runs.",
+      goal: "Build nimbus/shop under 250 MB, with no .git or .env inside, and still working. Keep both files in your project.",
+      done: "nimbus/shop is small, clean and still runs.",
       edit: [".dockerignore", "Dockerfile"],
-      focus: "quest/shop",
+      focus: "nimbus/shop",
       files: shopFiles(BIG_DOCKERFILE, null, true),
-      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", 1440],
+      setup: [`cd ${HOME}/shop`, "docker build -t nimbus/shop:1.0 .", 1440],
       won: (e) => {
         const img = newestShop(e);
         return Boolean(img && e.imageSize(img) < 250 * MB && !stat(img.fs, "/app/.git") && !stat(img.fs, "/app/.env") && e.trial(img).ok && e.host[`${HOME}/shop/.git`] && e.host[`${HOME}/shop/.env`]);
       },
       check: (e) => {
-        const img = newestShop(e) || e.image("quest/shop:1.0");
+        const img = newestShop(e) || e.image("nimbus/shop:1.0");
         const size = e.imageSize(img);
         const problems = [stat(img.fs, "/app/.git") && ".git inside", stat(img.fs, "/app/.env") && ".env inside", !e.trial(img).ok && "does not start"].filter(Boolean);
-        return { label: `${e.tagsOf(img)[0] || "quest/shop"} size`, text: [human(size), ...problems].join(" · ") };
+        return { label: `${e.tagsOf(img)[0] || "nimbus/shop"} size`, text: [human(size), ...problems].join(" · ") };
       },
       hints: [
-        "docker images, then docker history quest/shop:1.0. Which layers are big, and what did they copy?",
+        "docker images, then docker history nimbus/shop:1.0. Which layers are big, and what did they copy?",
         "COPY . . sends everything in the folder: .git, your local node_modules, logs, even .env. The build output's \"transferring context\" says how much. node:22 alone is 1.12GB, and npm ci also installs test tools.",
-        "In the editor: a .dockerignore with .git, node_modules, logs and .env; and a Dockerfile in two stages on node:22-alpine: FROM node:22-alpine AS deps, WORKDIR /app, COPY package*.json ./, RUN npm ci --omit=dev, then FROM node:22-alpine, WORKDIR /app, COPY --from=deps /app/node_modules ./node_modules, COPY . ., USER node, CMD [\"node\", \"server.js\"]. Then: docker build -t quest/shop:1.1 ."
+        "In the editor: a .dockerignore with .git, node_modules, logs and .env; and a Dockerfile in two stages on node:22-alpine: FROM node:22-alpine AS deps, WORKDIR /app, COPY package*.json ./, RUN npm ci --omit=dev, then FROM node:22-alpine, WORKDIR /app, COPY --from=deps /app/node_modules ./node_modules, COPY . ., USER node, CMD [\"node\", \"server.js\"]. Then: docker build -t nimbus/shop:1.1 ."
       ],
       lesson: "Image size is the sum of every layer. Keep the build context clean with .dockerignore, start from a small base, and ship only what runs: production dependencies, copied from a build stage.",
-      tries: ["docker images", "docker history quest/shop:1.0", "ls -la"]
+      tries: ["docker images", "docker history nimbus/shop:1.0", "ls -la"]
     },
     {
       id: "cache", title: "Cache busted on every change", level: "04",
@@ -2973,9 +2973,9 @@
       goal: "Change server.js and rebuild with the npm ci step still CACHED.",
       done: "Source changes no longer reinstall dependencies.",
       edit: ["Dockerfile", "server.js"],
-      focus: "quest/shop",
+      focus: "nimbus/shop",
       files: shopFiles(SLOW_DOCKERFILE, NODE_IGNORE, true),
-      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", 90, "echo '// faster checkout' >> server.js"],
+      setup: [`cd ${HOME}/shop`, "docker build -t nimbus/shop:1.0 .", 90, "echo '// faster checkout' >> server.js"],
       won: (e) => {
         const b = e.lastBuild;
         if (!b || !b.user) return false;
@@ -2988,12 +2988,12 @@
         return { label: "npm ci on the last build", text: !b ? "not built yet" : !step ? "no install step" : step.cached ? "CACHED" : "ran again" };
       },
       hints: [
-        "server.js already has an edit. Run docker build -t quest/shop:1.1 . and read the steps: which say CACHED, and which ran?",
+        "server.js already has an edit. Run docker build -t nimbus/shop:1.1 . and read the steps: which say CACHED, and which ran?",
         "A step's cache breaks when anything it copies changes, and every step after it runs again. COPY . . copies server.js, so any edit reruns npm ci.",
         "Copy only the dependency files, install, then copy the rest: in the Dockerfile put COPY package*.json ./ and RUN npm ci --omit=dev before COPY . . Build, change server.js (echo '// tweak' >> server.js), and build again."
       ],
       lesson: "Order a Dockerfile from what changes least to what changes most. Dependency files and their install step go before the source code, so only the last layers rebuild.",
-      tries: ["docker build -t quest/shop:1.1 .", "cat Dockerfile", "docker history quest/shop:1.0"]
+      tries: ["docker build -t nimbus/shop:1.1 .", "cat Dockerfile", "docker history nimbus/shop:1.0"]
     },
     {
       id: "oom", title: "OOMKilled", level: "11",
@@ -3001,10 +3001,10 @@
       goal: "Get report running again, with a memory limit it can live with.",
       done: "report runs within its memory limit.",
       files: service(`${HOME}/report`, "report.js", "report", "node", 8080, ["csv-parse"]),
-      setup: [`cd ${HOME}/report`, "docker build -t quest/report:2.0 .", `cd ${HOME}`, 600, "docker run -d --name report -p 8080:8080 --memory 128m quest/report:2.0", 4],
-      won: (e) => byImage(e, "quest/report").some((c) => c.state === "running" && c.memory > 0 && !c.proc.hung) && web(e, 8080).ok,
+      setup: [`cd ${HOME}/report`, "docker build -t nimbus/report:2.0 .", `cd ${HOME}`, 600, "docker run -d --name report -p 8080:8080 --memory 128m nimbus/report:2.0", 4],
+      won: (e) => byImage(e, "nimbus/report").some((c) => c.state === "running" && c.memory > 0 && !c.proc.hung) && web(e, 8080).ok,
       check: (e) => {
-        const c = byImage(e, "quest/report").find((x) => x.state === "running") || byImage(e, "quest/report")[0];
+        const c = byImage(e, "nimbus/report").find((x) => x.state === "running") || byImage(e, "nimbus/report")[0];
         const text = !c ? "no report container" : c.state !== "running" ? `${statusOf(e, c)}${c.oom ? ", OOMKilled" : ""}` : !c.memory ? "running with no memory limit" : c.proc.hung ? "stuck at its limit" : `running, limit ${Math.round(c.memory / MiB)}MiB`;
         return { label: "report", text };
       },
@@ -3018,7 +3018,7 @@
     }
   ];
   const siteFiles = project(`${HOME}/site`, { Dockerfile: file("FROM nginx:1.27\nCOPY index.html /usr/share/nginx/html/\n"), "index.html": file("<h1>Kitchen menu v1.0</h1>\n") });
-  const siteBuilds = [`cd ${HOME}/site`, "docker build -t quest/site:1.0 .", (e) => e.writeFile(`${HOME}/site/index.html`, "<h1>Kitchen menu v1.1</h1>\n"), "docker build -t quest/site:1.1 .", `cd ${HOME}`];
+  const siteBuilds = [`cd ${HOME}/site`, "docker build -t nimbus/site:1.0 .", (e) => e.writeFile(`${HOME}/site/index.html`, "<h1>Kitchen menu v1.1</h1>\n"), "docker build -t nimbus/site:1.1 .", `cd ${HOME}`];
   const serves = (e, port, text) => { const r = e.http(null, `localhost:${port}`); return r.code === 0 && r.text.includes(text); };
   const answer = (e, port) => { const r = e.http(null, `localhost:${port}`); return r.code === 0 ? r.text.split("\n").find((l) => /<h1>|: ok/.test(l)) || "answers" : r.text.replace(/^curl: \(\d+\) /, ""); };
   const named = (e, name) => e.containers.find((c) => c.name === name);
@@ -3102,19 +3102,19 @@ ${healthcheck ? `    healthcheck:
     {
       id: "conflict", title: "Name already in use", level: "00",
       story: "Version 1.1 of the menu site was built. The deploy step tried to start it as web and failed; the stopped 1.0 container is still there.",
-      goal: "Run quest/site:1.1 as the container named web, answering on localhost:8080.",
+      goal: "Run nimbus/site:1.1 as the container named web, answering on localhost:8080.",
       done: "web runs version 1.1.",
       files: siteFiles,
-      setup: [...siteBuilds, 60, "docker run -d --name web -p 8080:80 quest/site:1.0", 600, "docker stop web", 5, "docker run -d --name web -p 8080:80 quest/site:1.1", 1],
-      won: (e) => { const c = named(e, "web"); return Boolean(c && c.state === "running" && c.image === "quest/site:1.1" && serves(e, 8080, "v1.1")); },
+      setup: [...siteBuilds, 60, "docker run -d --name web -p 8080:80 nimbus/site:1.0", 600, "docker stop web", 5, "docker run -d --name web -p 8080:80 nimbus/site:1.1", 1],
+      won: (e) => { const c = named(e, "web"); return Boolean(c && c.state === "running" && c.image === "nimbus/site:1.1" && serves(e, 8080, "v1.1")); },
       check: (e) => ({ label: "curl localhost:8080", text: answer(e, 8080) }),
       hints: [
-        "Run the deploy command again: docker run -d --name web -p 8080:80 quest/site:1.1. What does the error say?",
-        "A stopped container keeps its name. docker ps -a shows web, Exited, still from quest/site:1.0. docker start web would bring back the old version.",
-        "Remove the old one (or rename it to keep it), then run the new one: docker rm web && docker run -d --name web -p 8080:80 quest/site:1.1"
+        "Run the deploy command again: docker run -d --name web -p 8080:80 nimbus/site:1.1. What does the error say?",
+        "A stopped container keeps its name. docker ps -a shows web, Exited, still from nimbus/site:1.0. docker start web would bring back the old version.",
+        "Remove the old one (or rename it to keep it), then run the new one: docker rm web && docker run -d --name web -p 8080:80 nimbus/site:1.1"
       ],
       lesson: "Stopped containers keep their names until removed. Deploy scripts remove (or rename) the old container before starting the new one, or use --rm.",
-      tries: ["docker ps -a", "docker run -d --name web -p 8080:80 quest/site:1.1", "docker images quest/site"]
+      tries: ["docker ps -a", "docker run -d --name web -p 8080:80 nimbus/site:1.1", "docker images nimbus/site"]
     },
     {
       id: "exit127", title: "Executable not found", level: "03",
@@ -3123,13 +3123,13 @@ ${healthcheck ? `    healthcheck:
       done: "The shop answers on localhost:3000.",
       edit: ["Dockerfile"], editDir: `${HOME}/shop`,
       files: shopFiles(DEV_DOCKERFILE.replace('CMD ["node", "server.js"]', 'ENTRYPOINT ["nodejs", "server.js"]'), NODE_IGNORE, false),
-      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", 20, "docker run -d --name shop -p 3000:3000 quest/shop:1.0", 1],
-      won: (e) => runningOf(e, "quest/shop").length > 0 && serves(e, 3000, "shop: ok"),
+      setup: [`cd ${HOME}/shop`, "docker build -t nimbus/shop:1.0 .", 20, "docker run -d --name shop -p 3000:3000 nimbus/shop:1.0", 1],
+      won: (e) => runningOf(e, "nimbus/shop").length > 0 && serves(e, 3000, "shop: ok"),
       check: (e) => ({ label: "curl localhost:3000", text: answer(e, 3000) }),
       hints: [
         "docker ps -a: shop is Created, never started. docker start shop prints the same error. Read it to the end.",
-        "exec: \"nodejs\": executable file not found in $PATH. The node image calls its program node, not nodejs: docker run --rm --entrypoint ls quest/shop:1.0 /usr/local/bin",
-        "Fix ENTRYPOINT in the Dockerfile to [\"node\", \"server.js\"], rebuild and re-create: docker build -t quest/shop:1.1 . && docker rm shop && docker run -d --name shop -p 3000:3000 quest/shop:1.1"
+        "exec: \"nodejs\": executable file not found in $PATH. The node image calls its program node, not nodejs: docker run --rm --entrypoint ls nimbus/shop:1.0 /usr/local/bin",
+        "Fix ENTRYPOINT in the Dockerfile to [\"node\", \"server.js\"], rebuild and re-create: docker build -t nimbus/shop:1.1 . && docker rm shop && docker run -d --name shop -p 3000:3000 nimbus/shop:1.1"
       ],
       lesson: "Exit code 127 and executable file not found mean the command does not exist in the image. Check the binary's name and that the image really contains it.",
       tries: ["docker ps -a", "docker start shop", "cat Dockerfile"]
@@ -3140,13 +3140,13 @@ ${healthcheck ? `    healthcheck:
       goal: "Get worker running and staying up.",
       done: "worker is running.",
       files: service(`${HOME}/worker`, "worker.js", "worker", "node", null, ["bullmq"]),
-      setup: [`cd ${HOME}/worker`, "docker build -t quest/worker:1.0 .", `cd ${HOME}`, 30, "docker run -d --name worker --restart always quest/worker:1.0", 3],
-      won: (e) => runningOf(e, "quest/worker").some((c) => c.env.some((x) => /^QUEUE_URL=\S+/.test(x))),
-      check: (e) => { const c = byImage(e, "quest/worker")[0]; return { label: "worker", text: c ? statusOf(e, c) : "no worker container" }; },
+      setup: [`cd ${HOME}/worker`, "docker build -t nimbus/worker:1.0 .", `cd ${HOME}`, 30, "docker run -d --name worker --restart always nimbus/worker:1.0", 3],
+      won: (e) => runningOf(e, "nimbus/worker").some((c) => c.env.some((x) => /^QUEUE_URL=\S+/.test(x))),
+      check: (e) => { const c = byImage(e, "nimbus/worker")[0]; return { label: "worker", text: c ? statusOf(e, c) : "no worker container" }; },
       hints: [
         "docker ps shows Restarting (1). The restart policy hides the crash; docker logs worker shows what happens on each start.",
         "QUEUE_URL is not set. Restarting cannot fix missing configuration, and docker update cannot add environment variables.",
-        "Re-create it with the variable: docker rm -f worker && docker run -d --name worker --restart always -e QUEUE_URL=redis://cache:6379 quest/worker:1.0"
+        "Re-create it with the variable: docker rm -f worker && docker run -d --name worker --restart always -e QUEUE_URL=redis://cache:6379 nimbus/worker:1.0"
       ],
       lesson: "A restart policy keeps a healthy service up; it does not fix a broken one. Restarting (1) means read the logs and fix the cause.",
       tries: ["docker ps", "docker logs worker", "docker inspect worker --format '{{.RestartCount}} {{.HostConfig.RestartPolicy.Name}}'"]
@@ -3157,13 +3157,13 @@ ${healthcheck ? `    healthcheck:
       goal: "Get worker running, with logs you can read.",
       done: "worker runs, and its logs are readable.",
       files: service(`${HOME}/worker`, "worker.js", "worker", "node", null, ["bullmq"]),
-      setup: [`cd ${HOME}/worker`, "docker build -t quest/worker:1.0 .", `cd ${HOME}`, 30, "docker run -d --name worker --log-driver none quest/worker:1.0", 2],
-      won: (e) => runningOf(e, "quest/worker").some((c) => c.log.type !== "none" && c.env.some((x) => /^QUEUE_URL=\S+/.test(x))),
-      check: (e) => { const c = byImage(e, "quest/worker")[0]; return { label: "worker", text: c ? `${statusOf(e, c)} · logs: ${c.log.type}` : "no worker container" }; },
+      setup: [`cd ${HOME}/worker`, "docker build -t nimbus/worker:1.0 .", `cd ${HOME}`, 30, "docker run -d --name worker --log-driver none nimbus/worker:1.0", 2],
+      won: (e) => runningOf(e, "nimbus/worker").some((c) => c.log.type !== "none" && c.env.some((x) => /^QUEUE_URL=\S+/.test(x))),
+      check: (e) => { const c = byImage(e, "nimbus/worker")[0]; return { label: "worker", text: c ? `${statusOf(e, c)} · logs: ${c.log.type}` : "no worker container" }; },
       hints: [
         "docker logs worker fails: the logging driver none keeps nothing. docker inspect worker --format '{{.HostConfig.LogConfig.Type}}' confirms it.",
         "Re-create it with the default json-file driver (or --log-driver local, which also rotates) and read what it says.",
-        "The log says QUEUE_URL is not set: docker rm worker && docker run -d --name worker --log-driver local -e QUEUE_URL=redis://cache:6379 quest/worker:1.0"
+        "The log says QUEUE_URL is not set: docker rm worker && docker run -d --name worker --log-driver local -e QUEUE_URL=redis://cache:6379 nimbus/worker:1.0"
       ],
       lesson: "Without logs you are guessing. Keep a readable driver (json-file or local) and limit its size, instead of turning logging off.",
       tries: ["docker ps -a", "docker logs worker", "docker inspect worker --format '{{.HostConfig.LogConfig.Type}}'"]
@@ -3174,13 +3174,13 @@ ${healthcheck ? `    healthcheck:
       goal: "Let api reach cache by its name.",
       done: "api reaches cache by name.",
       files: service(`${HOME}/api`, "api.js", "api", "node", 8080, ["ioredis"]),
-      setup: ["docker pull redis:7.4", `cd ${HOME}/api`, "docker build -t quest/api:1.0 .", `cd ${HOME}`, 60, "docker network create app-net", "docker run -d --name cache --network app-net redis:7.4", "docker run -d --name api --network app-net -p 8080:8080 -e REDIS_HOST=localhost quest/api:1.0", 2],
+      setup: ["docker pull redis:7.4", `cd ${HOME}/api`, "docker build -t nimbus/api:1.0 .", `cd ${HOME}`, 60, "docker network create app-net", "docker run -d --name cache --network app-net redis:7.4", "docker run -d --name api --network app-net -p 8080:8080 -e REDIS_HOST=localhost nimbus/api:1.0", 2],
       won: (e) => viaDns(e, "api"),
       check: (e) => ({ label: "api → cache:6379", text: linkText(e, "api") }),
       hints: [
         "docker logs api: ECONNREFUSED 127.0.0.1:6379. Which machine is 127.0.0.1 from inside a container?",
         "Each container has its own network namespace, so localhost is the api container itself, where nothing listens on 6379. cache is reachable by its name on app-net.",
-        "Re-create api pointing at the name: docker rm api && docker run -d --name api --network app-net -p 8080:8080 -e REDIS_HOST=cache quest/api:1.0"
+        "Re-create api pointing at the name: docker rm api && docker run -d --name api --network app-net -p 8080:8080 -e REDIS_HOST=cache nimbus/api:1.0"
       ],
       lesson: "Inside a container, localhost means that container. Reach other containers by name on a shared user-defined network.",
       tries: ["docker logs api", "docker inspect api --format '{{.Config.Env}}'", "docker network inspect app-net"]
@@ -3191,13 +3191,13 @@ ${healthcheck ? `    healthcheck:
       goal: "Make localhost:3000 reach the shop through its published port.",
       done: "The shop answers on localhost:3000.",
       files: shopFiles(DEV_DOCKERFILE, NODE_IGNORE, false),
-      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", `cd ${HOME}`, 30, "docker run -d --name shop -p 3000:3000 -e HOST=127.0.0.1 quest/shop:1.0", 5],
-      won: (e) => serves(e, 3000, "shop: ok") && runningOf(e, "quest/shop").some((c) => c.netMode !== "host"),
+      setup: [`cd ${HOME}/shop`, "docker build -t nimbus/shop:1.0 .", `cd ${HOME}`, 30, "docker run -d --name shop -p 3000:3000 -e HOST=127.0.0.1 nimbus/shop:1.0", 5],
+      won: (e) => serves(e, 3000, "shop: ok") && runningOf(e, "nimbus/shop").some((c) => c.netMode !== "host"),
       check: (e) => ({ label: "curl localhost:3000", text: answer(e, 3000) }),
       hints: [
         "curl localhost:3000 says Connection reset by peer, so Docker forwards the port but nothing answers behind it. docker logs shop: where does it listen?",
         "127.0.0.1 inside the container only accepts connections from inside the container (docker exec shop wget -qO- localhost:3000 works). Published ports arrive on the container's own network interface.",
-        "Let the app listen on every interface: docker rm -f shop && docker run -d --name shop -p 3000:3000 -e HOST=0.0.0.0 quest/shop:1.0"
+        "Let the app listen on every interface: docker rm -f shop && docker run -d --name shop -p 3000:3000 -e HOST=0.0.0.0 nimbus/shop:1.0"
       ],
       lesson: "A server in a container must listen on 0.0.0.0. To keep a port private, publish it on the host's loopback instead: -p 127.0.0.1:3000:3000.",
       tries: ["curl localhost:3000", "docker logs shop", "docker exec shop wget -qO- localhost:3000"]
@@ -3205,11 +3205,11 @@ ${healthcheck ? `    healthcheck:
     {
       id: "portinuse", title: "Port already allocated", level: "06",
       story: "Version 1.1 of the menu site should replace 1.0 on port 8080. The new container was created but would not start.",
-      goal: "Run quest/site:1.1 as web on localhost:8080.",
+      goal: "Run nimbus/site:1.1 as web on localhost:8080.",
       done: "web serves version 1.1 on 8080.",
       files: siteFiles,
-      setup: [...siteBuilds, 60, "docker run -d --name web-old -p 8080:80 quest/site:1.0", 120, "docker run -d --name web -p 8080:80 quest/site:1.1", 1],
-      won: (e) => { const c = named(e, "web"); return Boolean(c && c.state === "running" && c.image === "quest/site:1.1" && serves(e, 8080, "v1.1")); },
+      setup: [...siteBuilds, 60, "docker run -d --name web-old -p 8080:80 nimbus/site:1.0", 120, "docker run -d --name web -p 8080:80 nimbus/site:1.1", 1],
+      won: (e) => { const c = named(e, "web"); return Boolean(c && c.state === "running" && c.image === "nimbus/site:1.1" && serves(e, 8080, "v1.1")); },
       check: (e) => ({ label: "curl localhost:8080", text: answer(e, 8080) }),
       hints: [
         "docker start web and read the error: Bind for 0.0.0.0:8080 failed: port is already allocated.",
@@ -3225,7 +3225,7 @@ ${healthcheck ? `    healthcheck:
       goal: "Let api reach cache by name, keeping the front and back networks.",
       done: "api reaches cache by name.",
       files: service(`${HOME}/api`, "api.js", "api", "node", 8080, ["ioredis"]),
-      setup: ["docker pull redis:7.4", `cd ${HOME}/api`, "docker build -t quest/api:1.0 .", `cd ${HOME}`, 60, "docker network create front", "docker network create back", "docker run -d --name cache --network back redis:7.4", "docker run -d --name api --network front -p 8080:8080 quest/api:1.0", 2],
+      setup: ["docker pull redis:7.4", `cd ${HOME}/api`, "docker build -t nimbus/api:1.0 .", `cd ${HOME}`, 60, "docker network create front", "docker network create back", "docker run -d --name cache --network back redis:7.4", "docker run -d --name api --network front -p 8080:8080 nimbus/api:1.0", 2],
       won: (e) => viaDns(e, "api") && Boolean(e.networks.front && e.networks.back),
       check: (e) => ({ label: "api → cache:6379", text: linkText(e, "api") }),
       hints: [
@@ -3290,56 +3290,56 @@ ${healthcheck ? `    healthcheck:
     },
     {
       id: "secretlayer", title: "Token in a layer", level: "15",
-      story: "A scan found an npm token inside quest/payments:1.0, although the Dockerfile deletes .npmrc right after npm ci.",
-      goal: "Build quest/payments with no token in any layer or in its history, and still working.",
+      story: "A scan found an npm token inside nimbus/payments:1.0, although the Dockerfile deletes .npmrc right after npm ci.",
+      goal: "Build nimbus/payments with no token in any layer or in its history, and still working.",
       done: "The image builds and runs, and no layer holds the token.",
-      edit: ["Dockerfile", ".dockerignore"], editDir: `${HOME}/payments`, focus: "quest/payments",
+      edit: ["Dockerfile", ".dockerignore"], editDir: `${HOME}/payments`, focus: "nimbus/payments",
       files: payFiles,
-      setup: [`cd ${HOME}/payments`, "docker build -t quest/payments:1.0 .", 300],
-      won: (e) => { const img = newestOf(e, "quest/payments"); return Boolean(img && !leaks(e, img) && e.trial(img).ok); },
-      check: (e) => { const img = newestOf(e, "quest/payments") || e.image("quest/payments:1.0"); return { label: `${e.tagsOf(img)[0]}`, text: leaks(e, img) ? "token found in a layer" : e.trial(img).ok ? "clean, and it runs" : "clean, but it does not start" }; },
+      setup: [`cd ${HOME}/payments`, "docker build -t nimbus/payments:1.0 .", 300],
+      won: (e) => { const img = newestOf(e, "nimbus/payments"); return Boolean(img && !leaks(e, img) && e.trial(img).ok); },
+      check: (e) => { const img = newestOf(e, "nimbus/payments") || e.image("nimbus/payments:1.0"); return { label: `${e.tagsOf(img)[0]}`, text: leaks(e, img) ? "token found in a layer" : e.trial(img).ok ? "clean, and it runs" : "clean, but it does not start" }; },
       hints: [
-        "docker history quest/payments:1.0: the COPY that includes .npmrc is its own layer. The rm in the next step hides the file but cannot change that layer.",
+        "docker history nimbus/payments:1.0: the COPY that includes .npmrc is its own layer. The rm in the next step hides the file but cannot change that layer.",
         "Build arguments are no better: docker history shows their values. BuildKit secrets mount a file for one RUN step only, and never store it.",
-        "In the Dockerfile: COPY package*.json ./ then RUN --mount=type=secret,id=npmrc,target=/root/.npmrc npm ci --omit=dev. Then: docker build --secret id=npmrc,src=.npmrc -t quest/payments:1.1 ."
+        "In the Dockerfile: COPY package*.json ./ then RUN --mount=type=secret,id=npmrc,target=/root/.npmrc npm ci --omit=dev. Then: docker build --secret id=npmrc,src=.npmrc -t nimbus/payments:1.1 ."
       ],
       lesson: "Anything copied, written or passed as ARG ends up in the image or its history. Use --mount=type=secret for credentials needed at build time.",
-      tries: ["docker history quest/payments:1.0", "cat Dockerfile", "docker run --rm quest/payments:1.0 ls -a /app"]
+      tries: ["docker history nimbus/payments:1.0", "cat Dockerfile", "docker run --rm nimbus/payments:1.0 ls -a /app"]
     },
     {
       id: "copymissing", title: "COPY: not found", level: "03",
       story: "The front end was built into dist/ as usual, but docker build fails on the COPY of dist since someone tidied the .dockerignore.",
-      goal: "Build quest/web with the site from dist/ in it.",
-      done: "quest/web builds and serves the site.",
+      goal: "Build nimbus/web with the site from dist/ in it.",
+      done: "nimbus/web builds and serves the site.",
       edit: [".dockerignore", "Dockerfile"], editDir: `${HOME}/web`,
       files: webFiles,
       setup: [`cd ${HOME}/web`],
-      won: (e) => { const img = newestOf(e, "quest/web"); const f = img && img.fs["/usr/share/nginx/html/index.html"]; return Boolean(f && /Kitchen web/.test(f.text || "")); },
-      check: (e) => { const img = newestOf(e, "quest/web"); return { label: "quest/web", text: !img ? "not built" : (img.fs["/usr/share/nginx/html/index.html"] || {}).text ? "built with the site" : "built, but no index.html" }; },
+      won: (e) => { const img = newestOf(e, "nimbus/web"); const f = img && img.fs["/usr/share/nginx/html/index.html"]; return Boolean(f && /Kitchen web/.test(f.text || "")); },
+      check: (e) => { const img = newestOf(e, "nimbus/web"); return { label: "nimbus/web", text: !img ? "not built" : (img.fs["/usr/share/nginx/html/index.html"] || {}).text ? "built with the site" : "built, but no index.html" }; },
       hints: [
-        "Run docker build -t quest/web:1.0 . and read the error: \"/dist\": not found. Yet ls shows dist right there.",
+        "Run docker build -t nimbus/web:1.0 . and read the error: \"/dist\": not found. Yet ls shows dist right there.",
         "The build only sees the context Docker sends, and .dockerignore decides what that is. cat .dockerignore: dist is excluded.",
-        "Remove the dist line from .dockerignore (in the editor, or sed -i '/^dist$/d' .dockerignore), then docker build -t quest/web:1.0 ."
+        "Remove the dist line from .dockerignore (in the editor, or sed -i '/^dist$/d' .dockerignore), then docker build -t nimbus/web:1.0 ."
       ],
       lesson: "\"not found\" in COPY means the file is missing from the build context, not from your disk. Check .dockerignore and the folder you build from.",
-      tries: ["docker build -t quest/web:1.0 .", "cat .dockerignore", "ls dist"]
+      tries: ["docker build -t nimbus/web:1.0 .", "cat .dockerignore", "ls dist"]
     },
     {
       id: "platform", title: "exec format error", level: "14",
-      story: "quest/shop:2.0 was built on a laptop with an Arm chip and copied to the amd64 server. It exits the moment it starts.",
+      story: "nimbus/shop:2.0 was built on a laptop with an Arm chip and copied to the amd64 server. It exits the moment it starts.",
       goal: "Get the shop answering on localhost:3000 on this server.",
       done: "An amd64 build runs on the server.",
       files: shopFiles(DEV_DOCKERFILE, NODE_IGNORE, false),
-      setup: [`cd ${HOME}/shop`, "docker build --platform linux/arm64 -t quest/shop:2.0 .", 60, "docker run -d --name shop -p 3000:3000 quest/shop:2.0", 1],
+      setup: [`cd ${HOME}/shop`, "docker build --platform linux/arm64 -t nimbus/shop:2.0 .", 60, "docker run -d --name shop -p 3000:3000 nimbus/shop:2.0", 1],
       won: (e) => serves(e, 3000, "shop: ok"),
       check: (e) => ({ label: "curl localhost:3000", text: answer(e, 3000) }),
       hints: [
         "docker logs shop: exec format error. docker run also printed a warning about the platform.",
-        "docker image inspect quest/shop:2.0 --format '{{.Architecture}}' says arm64; this server is amd64. Asking docker run for --platform linux/amd64 cannot convert it.",
-        "Build for the server's platform, then re-create: docker build --platform linux/amd64 -t quest/shop:2.0 . && docker rm shop && docker run -d --name shop -p 3000:3000 quest/shop:2.0"
+        "docker image inspect nimbus/shop:2.0 --format '{{.Architecture}}' says arm64; this server is amd64. Asking docker run for --platform linux/amd64 cannot convert it.",
+        "Build for the server's platform, then re-create: docker build --platform linux/amd64 -t nimbus/shop:2.0 . && docker rm shop && docker run -d --name shop -p 3000:3000 nimbus/shop:2.0"
       ],
       lesson: "Images are built for one CPU architecture unless you build for several. Build with --platform for where it runs, or publish a multi-platform image with buildx.",
-      tries: ["docker logs shop", "docker image inspect quest/shop:2.0 --format '{{.Architecture}}'", "docker info"]
+      tries: ["docker logs shop", "docker image inspect nimbus/shop:2.0 --format '{{.Architecture}}'", "docker info"]
     },
     {
       id: "auth", title: "Private registry", level: "14",
@@ -3399,13 +3399,13 @@ ${healthcheck ? `    healthcheck:
       goal: "Re-create chatty with log rotation, so its logs can never fill the disk again.",
       done: "chatty's logs rotate.",
       files: service(`${HOME}/chatty`, "chatty.js", "chatty", "node", 8080, ["express"]),
-      setup: [`cd ${HOME}/chatty`, "docker build -t quest/chatty:1.0 .", `cd ${HOME}`, 30, "docker run -d --name chatty -p 8080:8080 quest/chatty:1.0", (e) => { e.container("chatty").logBytes = 14.2 * GB; e.capacity = 24 * 1024 * MiB; }, 4320],
-      won: (e) => runningOf(e, "quest/chatty").some((c) => c.log.type === "local" || (c.log.type === "json-file" && c.log.opts["max-size"])) && e.diskUsed() < 0.8 * e.capacity,
-      check: (e) => { const c = byImage(e, "quest/chatty")[0]; return { label: "disk", text: `${Math.round(e.diskUsed() / e.capacity * 100)}% used${c ? ` · chatty log ${human(c.logBytes)}${c.log.opts["max-size"] || c.log.type === "local" ? ", rotated" : ""}` : ""}` }; },
+      setup: [`cd ${HOME}/chatty`, "docker build -t nimbus/chatty:1.0 .", `cd ${HOME}`, 30, "docker run -d --name chatty -p 8080:8080 nimbus/chatty:1.0", (e) => { e.container("chatty").logBytes = 14.2 * GB; e.capacity = 24 * 1024 * MiB; }, 4320],
+      won: (e) => runningOf(e, "nimbus/chatty").some((c) => c.log.type === "local" || (c.log.type === "json-file" && c.log.opts["max-size"])) && e.diskUsed() < 0.8 * e.capacity,
+      check: (e) => { const c = byImage(e, "nimbus/chatty")[0]; return { label: "disk", text: `${Math.round(e.diskUsed() / e.capacity * 100)}% used${c ? ` · chatty log ${human(c.logBytes)}${c.log.opts["max-size"] || c.log.type === "local" ? ", rotated" : ""}` : ""}` }; },
       hints: [
         "df -h shows the disk almost full, but docker system df shows little in images and volumes. Container logs are not counted there.",
         "docker inspect chatty --format '{{.LogPath}}', then sudo du -sh on that path: the json-file log has no size limit by default. Truncating it frees the space only until it grows back.",
-        "Re-create chatty with rotation (removing the old container deletes its log): docker rm -f chatty && docker run -d --name chatty -p 8080:8080 --log-opt max-size=10m --log-opt max-file=3 quest/chatty:1.0"
+        "Re-create chatty with rotation (removing the old container deletes its log): docker rm -f chatty && docker run -d --name chatty -p 8080:8080 --log-opt max-size=10m --log-opt max-file=3 nimbus/chatty:1.0"
       ],
       lesson: "The default json-file log grows forever. Set max-size and max-file per container, or the local driver, or make them the default in /etc/docker/daemon.json.",
       tries: ["df -h", "docker system df", "docker inspect chatty --format '{{.LogPath}}'"]
@@ -3413,19 +3413,19 @@ ${healthcheck ? `    healthcheck:
     {
       id: "diskfull", title: "No space left on device", level: "16",
       story: "The build server cannot build the shop any more: the disk is full. The pgdata volume holds the reporting database, which is stopped for maintenance.",
-      goal: "Free space and build quest/shop:1.1, without losing the pgdata volume.",
+      goal: "Free space and build nimbus/shop:1.1, without losing the pgdata volume.",
       done: "The build works, and pgdata is safe.",
       files: shopFiles('FROM node:22-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci --omit=dev\nCOPY . .\nEXPOSE 3000\nCMD ["node", "server.js"]\n', NODE_IGNORE, true),
-      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", 1440, clutter],
-      won: (e) => Boolean(e.image("quest/shop:1.1") && e.image("quest/shop:1.1").built && e.volumes.pgdata),
+      setup: [`cd ${HOME}/shop`, "docker build -t nimbus/shop:1.0 .", 1440, clutter],
+      won: (e) => Boolean(e.image("nimbus/shop:1.1") && e.image("nimbus/shop:1.1").built && e.volumes.pgdata),
       check: (e) => ({ label: "disk", text: `${Math.min(100, Math.round(e.diskUsed() / e.capacity * 100))}% used${e.volumes.pgdata ? "" : " · pgdata deleted"}` }),
       hints: [
-        "docker build -t quest/shop:1.1 . fails with no space left on device. df -h agrees. Where is the space going? docker system df",
+        "docker build -t nimbus/shop:1.1 . fails with no space left on device. df -h agrees. Where is the space going? docker system df",
         "Most of it is reclaimable: dangling images from old builds and the build cache. The volume is not in use right now, which is exactly why a volume prune would delete it.",
-        "Remove what can be rebuilt, not what cannot: docker builder prune -f && docker image prune -f, then docker build -t quest/shop:1.1 ."
+        "Remove what can be rebuilt, not what cannot: docker builder prune -f && docker image prune -f, then docker build -t nimbus/shop:1.1 ."
       ],
       lesson: "Measure with docker system df, then prune the build cache and dangling images. Volumes hold data that cannot be rebuilt: never prune them blindly.",
-      tries: ["docker build -t quest/shop:1.1 .", "df -h", "docker system df"]
+      tries: ["docker build -t nimbus/shop:1.1 .", "df -h", "docker system df"]
     },
     {
       id: "healthcheck", title: "Unhealthy", level: "11",
@@ -3434,13 +3434,13 @@ ${healthcheck ? `    healthcheck:
       done: "The shop is healthy.",
       edit: ["Dockerfile"], editDir: `${HOME}/shop`,
       files: shopFiles(HEALTH_DOCKERFILE, NODE_IGNORE, false),
-      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", 20, "docker run -d --name shop -p 3000:3000 quest/shop:1.0", 10],
-      won: (e) => runningOf(e, "quest/shop").some((c) => { const hc = e.health(c); const test = (c.health || e.images[c.imageId].config.Healthcheck || []).join(" "); return hc && hc.status === "healthy" && /localhost:3000|127\.0\.0\.1:3000/.test(test); }),
-      check: (e) => { const c = runningOf(e, "quest/shop")[0]; const hc = c && e.health(c); return { label: "shop health", text: !c ? "not running" : !hc ? "no healthcheck" : hc.status }; },
+      setup: [`cd ${HOME}/shop`, "docker build -t nimbus/shop:1.0 .", 20, "docker run -d --name shop -p 3000:3000 nimbus/shop:1.0", 10],
+      won: (e) => runningOf(e, "nimbus/shop").some((c) => { const hc = e.health(c); const test = (c.health || e.images[c.imageId].config.Healthcheck || []).join(" "); return hc && hc.status === "healthy" && /localhost:3000|127\.0\.0\.1:3000/.test(test); }),
+      check: (e) => { const c = runningOf(e, "nimbus/shop")[0]; const hc = c && e.health(c); return { label: "shop health", text: !c ? "not running" : !hc ? "no healthcheck" : hc.status }; },
       hints: [
         "docker inspect shop --format '{{json .State.Health}}' shows the check's own output.",
         "/bin/sh: curl: not found. The image is based on alpine, which has wget but no curl, so the check fails while the app is fine.",
-        "Use wget in the Dockerfile's HEALTHCHECK: CMD wget -qO- http://localhost:3000/ || exit 1. Then docker build -t quest/shop:1.1 . && docker rm -f shop && docker run -d --name shop -p 3000:3000 quest/shop:1.1"
+        "Use wget in the Dockerfile's HEALTHCHECK: CMD wget -qO- http://localhost:3000/ || exit 1. Then docker build -t nimbus/shop:1.1 . && docker rm -f shop && docker run -d --name shop -p 3000:3000 nimbus/shop:1.1"
       ],
       lesson: "A healthcheck runs inside the container, with that image's tools. Test it with docker exec first, and check the app itself, not a command that always succeeds.",
       tries: ["docker ps", "docker inspect shop --format '{{json .State.Health}}'", "docker exec shop wget -qO- http://localhost:3000/"]
@@ -3544,16 +3544,16 @@ ${healthcheck ? `    healthcheck:
       goal: "Run the shop with verbose logging, answering on localhost:3000.",
       done: "The shop runs with verbose logging.",
       files: shopFiles(DEV_DOCKERFILE, NODE_IGNORE, false),
-      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", `cd ${HOME}`, 60, "docker run -d --name shop -p 3000:3000 quest/shop:1.0 --verbose", 1],
-      won: (e) => serves(e, 3000, "shop: ok") && runningOf(e, "quest/shop").some((c) => c.proc.debug),
-      check: (e) => { const c = byImage(e, "quest/shop")[0]; return { label: "shop", text: !c ? "no shop container" : c.state !== "running" ? statusOf(e, c) : c.proc.debug ? "running, verbose" : "running, not verbose" }; },
+      setup: [`cd ${HOME}/shop`, "docker build -t nimbus/shop:1.0 .", `cd ${HOME}`, 60, "docker run -d --name shop -p 3000:3000 nimbus/shop:1.0 --verbose", 1],
+      won: (e) => serves(e, 3000, "shop: ok") && runningOf(e, "nimbus/shop").some((c) => c.proc.debug),
+      check: (e) => { const c = byImage(e, "nimbus/shop")[0]; return { label: "shop", text: !c ? "no shop container" : c.state !== "running" ? statusOf(e, c) : c.proc.debug ? "running, verbose" : "running, not verbose" }; },
       hints: [
         "docker logs shop: node: bad option: --verbose. Who received that flag?",
         "Anything after the image name replaces CMD. The image's CMD was node server.js; now it is just --verbose, and the node image's entrypoint runs node --verbose.",
-        "Pass the whole command, or use the app's setting instead: docker rm shop && docker run -d --name shop -p 3000:3000 quest/shop:1.0 node server.js --verbose (or -e LOG_LEVEL=debug)."
+        "Pass the whole command, or use the app's setting instead: docker rm shop && docker run -d --name shop -p 3000:3000 nimbus/shop:1.0 node server.js --verbose (or -e LOG_LEVEL=debug)."
       ],
       lesson: "Arguments after the image replace CMD entirely; they are not appended. ENTRYPOINT stays, which is why images put the fixed part there and defaults in CMD.",
-      tries: ["docker ps -a", "docker logs shop", "docker inspect quest/shop:1.0 --format '{{.Config.Entrypoint}} {{.Config.Cmd}}'"]
+      tries: ["docker ps -a", "docker logs shop", "docker inspect nimbus/shop:1.0 --format '{{.Config.Entrypoint}} {{.Config.Cmd}}'"]
     },
     {
       id: "noexec", title: "Entrypoint permission denied", level: "03",
@@ -3562,13 +3562,13 @@ ${healthcheck ? `    healthcheck:
       done: "start.sh runs and the shop answers.",
       edit: ["Dockerfile", "start.sh"], editDir: `${HOME}/shop`,
       files: { ...shopFiles(NOEXEC_DOCKERFILE, NODE_IGNORE, false), [`${HOME}/shop/start.sh`]: file('#!/bin/sh\nset -e\necho "shop: starting"\nexec node server.js "$@"\n', { mode: 0o644 }) },
-      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", 10, "docker run -d --name shop -p 3000:3000 quest/shop:1.0", 1],
-      won: (e) => serves(e, 3000, "shop: ok") && runningOf(e, "quest/shop").some((c) => (c.entrypoint || [])[0] === "/app/start.sh"),
+      setup: [`cd ${HOME}/shop`, "docker build -t nimbus/shop:1.0 .", 10, "docker run -d --name shop -p 3000:3000 nimbus/shop:1.0", 1],
+      won: (e) => serves(e, 3000, "shop: ok") && runningOf(e, "nimbus/shop").some((c) => (c.entrypoint || [])[0] === "/app/start.sh"),
       check: (e) => ({ label: "curl localhost:3000", text: answer(e, 3000) }),
       hints: [
         "docker start shop and read the end of the error: exec: \"/app/start.sh\": permission denied.",
         "ls -l start.sh: -rw-r--r--, no x bit. COPY keeps the file's mode, and nobody, not even root, can execute a file without one. --privileged or -u root does not change that.",
-        "Make it executable and rebuild: chmod +x start.sh && docker build -t quest/shop:1.1 . && docker rm shop && docker run -d --name shop -p 3000:3000 quest/shop:1.1 (or COPY --chmod=755 in the Dockerfile)."
+        "Make it executable and rebuild: chmod +x start.sh && docker build -t nimbus/shop:1.1 . && docker rm shop && docker run -d --name shop -p 3000:3000 nimbus/shop:1.1 (or COPY --chmod=755 in the Dockerfile)."
       ],
       lesson: "Scripts need the executable bit inside the image. Set it in git (git update-index --chmod=+x), with COPY --chmod, or with RUN chmod +x.",
       tries: ["docker start shop", "ls -l start.sh", "cat Dockerfile"]
@@ -3579,9 +3579,9 @@ ${healthcheck ? `    healthcheck:
       goal: "Make the database unreachable from outside the host, keep its data, and keep api working.",
       done: "Only api can reach the database.",
       files: service(`${HOME}/orders`, "orders.js", "orders", "node", 8080, ["pg"]),
-      setup: [`cd ${HOME}/orders`, "docker build -t quest/orders:1.0 .", `cd ${HOME}`, "docker network create app-net",
+      setup: [`cd ${HOME}/orders`, "docker build -t nimbus/orders:1.0 .", `cd ${HOME}`, "docker network create app-net",
         "docker run -d --name db --network app-net -p 5432:5432 -e POSTGRES_PASSWORD=kitchen-practice -v pgdata:/var/lib/postgresql/data postgres:17", 2,
-        "docker run -d --name api --network app-net -p 8080:8080 -e DB_HOST=db quest/orders:1.0", 600],
+        "docker run -d --name api --network app-net -p 8080:8080 -e DB_HOST=db nimbus/orders:1.0", 600],
       won: (e) => { const db = e.containers.find((c) => c.state === "running" && c.proc.app === "postgres"); return Boolean(db && !exposed(e).includes(db) && db.mounts.some((m) => m.name === "pgdata") && viaDns(e, "api") && serves(e, 8080, "orders: ok")); },
       check: (e) => { const db = e.containers.find((c) => c.proc.app === "postgres" && c.state === "running"); return { label: "db from the internet", text: !db ? "db not running" : exposed(e).includes(db) ? `reachable on 0.0.0.0:${db.ports[0].host}` : "not reachable" }; },
       hints: [
@@ -3598,13 +3598,13 @@ ${healthcheck ? `    healthcheck:
       goal: "Let api reach Redis on the host, keeping api on its own network.",
       done: "api reaches Redis on the host.",
       files: service(`${HOME}/api`, "api.js", "api", "node", 8080, ["ioredis"]),
-      setup: [(e) => { e.hostServices = { 6379: "redis" }; }, `cd ${HOME}/api`, "docker build -t quest/api:1.0 .", `cd ${HOME}`, 30, "docker run -d --name api -p 8080:8080 -e REDIS_HOST=host.docker.internal quest/api:1.0", 1],
+      setup: [(e) => { e.hostServices = { 6379: "redis" }; }, `cd ${HOME}/api`, "docker build -t nimbus/api:1.0 .", `cd ${HOME}`, 30, "docker run -d --name api -p 8080:8080 -e REDIS_HOST=host.docker.internal nimbus/api:1.0", 1],
       won: (e) => { const c = named(e, "api"); return Boolean(c && c.state === "running" && c.proc.via === "hosts" && c.netMode !== "host"); },
       check: (e) => { const c = named(e, "api"); return { label: "api → redis on the host", text: !c ? "no api container" : c.state !== "running" ? statusOf(e, c) : c.proc.via === "hosts" ? "through host.docker.internal" : c.proc.via === "host" ? "using the host's network" : "by IP address" }; },
       hints: [
         "docker logs api: ENOTFOUND host.docker.internal. ss -ltn shows Redis listening on 0.0.0.0:6379 on the host.",
         "Docker Desktop defines host.docker.internal for you; Docker Engine on Linux does not. localhost would be the container itself.",
-        "Map the name to the host's gateway address: docker rm api && docker run -d --name api -p 8080:8080 --add-host=host.docker.internal:host-gateway -e REDIS_HOST=host.docker.internal quest/api:1.0"
+        "Map the name to the host's gateway address: docker rm api && docker run -d --name api -p 8080:8080 --add-host=host.docker.internal:host-gateway -e REDIS_HOST=host.docker.internal nimbus/api:1.0"
       ],
       lesson: "On Linux, add --add-host=host.docker.internal:host-gateway (extra_hosts in Compose) to reach services on the host, and make sure they listen on an address the bridge can reach.",
       tries: ["docker logs api", "ss -ltn", "docker inspect api --format '{{.HostConfig.ExtraHosts}}'"]
@@ -3616,13 +3616,13 @@ ${healthcheck ? `    healthcheck:
       done: "The shop stops cleanly on SIGTERM.",
       edit: ["server.js", "Dockerfile"], editDir: `${HOME}/shop`,
       files: shopFiles(DEV_DOCKERFILE, NODE_IGNORE, false),
-      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", 120, "docker run -d --name shop -p 3000:3000 quest/shop:1.0", 600],
-      won: (e) => byImage(e, "quest/shop").some((c) => c.lastStop && c.lastStop.signal === "TERM" && (c.lastStop.code === 0 || c.lastStop.code === 143)),
-      check: (e) => { const c = byImage(e, "quest/shop").find((x) => x.lastStop) || byImage(e, "quest/shop")[0]; return { label: "docker stop", text: !c || !c.lastStop ? "not stopped yet" : `Exited (${c.lastStop.code})${c.lastStop.waited ? ` after ${c.lastStop.waited}s` : " at once"}` }; },
+      setup: [`cd ${HOME}/shop`, "docker build -t nimbus/shop:1.0 .", 120, "docker run -d --name shop -p 3000:3000 nimbus/shop:1.0", 600],
+      won: (e) => byImage(e, "nimbus/shop").some((c) => c.lastStop && c.lastStop.signal === "TERM" && (c.lastStop.code === 0 || c.lastStop.code === 143)),
+      check: (e) => { const c = byImage(e, "nimbus/shop").find((x) => x.lastStop) || byImage(e, "nimbus/shop")[0]; return { label: "docker stop", text: !c || !c.lastStop ? "not stopped yet" : `Exited (${c.lastStop.code})${c.lastStop.waited ? ` after ${c.lastStop.waited}s` : " at once"}` }; },
       hints: [
         "Run docker stop shop, then docker ps -a: Exited (137). 137 means SIGKILL, so the app never stopped on its own.",
         "docker stop sends SIGTERM and waits 10 seconds. node runs as PID 1, and the kernel ignores signals that PID 1 has no handler for. A shorter -t only kills it sooner.",
-        "Give it an init process that forwards the signal: docker rm -f shop && docker run -d --init --name shop -p 3000:3000 quest/shop:1.0, then docker stop shop. Or handle SIGTERM in server.js and rebuild."
+        "Give it an init process that forwards the signal: docker rm -f shop && docker run -d --init --name shop -p 3000:3000 nimbus/shop:1.0, then docker stop shop. Or handle SIGTERM in server.js and rebuild."
       ],
       lesson: "PID 1 is special: it ignores signals it does not handle. Run with --init (or tini in the image), handle SIGTERM in the app, and use exec form so the app gets the signal.",
       tries: ["docker stop shop", "docker ps -a", "docker inspect shop --format '{{.HostConfig.Init}}'"]
@@ -3655,9 +3655,9 @@ ${healthcheck ? `    healthcheck:
       goal: "Get pricing answering on localhost:8080 again, keeping a CPU limit.",
       done: "pricing answers, within a CPU limit it can live with.",
       files: service(`${HOME}/pricing`, "pricing.js", "pricing", "node", 8080, ["express"]),
-      setup: [`cd ${HOME}/pricing`, "docker build -t quest/pricing:1.0 .", `cd ${HOME}`, 60, "docker run -d --name pricing -p 8080:8080 --cpus 0.1 --memory 512m quest/pricing:1.0", 30],
-      won: (e) => serves(e, 8080, "pricing:") && runningOf(e, "quest/pricing").some((c) => c.cpus >= 0.8),
-      check: (e) => { const c = runningOf(e, "quest/pricing")[0]; return { label: "curl localhost:8080", text: `${answer(e, 8080)}${c ? ` · limit ${c.cpus ? c.cpus + " CPU" : "none"}` : ""}` }; },
+      setup: [`cd ${HOME}/pricing`, "docker build -t nimbus/pricing:1.0 .", `cd ${HOME}`, 60, "docker run -d --name pricing -p 8080:8080 --cpus 0.1 --memory 512m nimbus/pricing:1.0", 30],
+      won: (e) => serves(e, 8080, "pricing:") && runningOf(e, "nimbus/pricing").some((c) => c.cpus >= 0.8),
+      check: (e) => { const c = runningOf(e, "nimbus/pricing")[0]; return { label: "curl localhost:8080", text: `${answer(e, 8080)}${c ? ` · limit ${c.cpus ? c.cpus + " CPU" : "none"}` : ""}` }; },
       hints: [
         "curl localhost:8080 times out, yet docker logs pricing is clean. Look at docker stats --no-stream: what is the CPU column stuck at?",
         "About 10% is the limit, not the load: --cpus 0.1 (docker inspect pricing --format '{{.HostConfig.NanoCpus}}' says 100000000). docker exec pricing cat /sys/fs/cgroup/cpu.stat shows nr_throttled climbing. More memory or --cpu-shares cannot lift a hard quota.",
@@ -3672,14 +3672,14 @@ ${healthcheck ? `    healthcheck:
       goal: "Contain the resizer with a PID limit, and get web answering on localhost:8080 again.",
       done: "The resizer is contained, and web is back.",
       files: service(`${HOME}/resizer`, "resizer.js", "resizer", "node", 8080, ["sharp"]),
-      setup: ["docker pull nginx:1.27", `cd ${HOME}/resizer`, "docker build -t quest/resizer:1.0 .", `cd ${HOME}`, "docker run -d --name web -p 8080:80 nginx:1.27", "docker run -d --name resizer quest/resizer:1.0",
+      setup: ["docker pull nginx:1.27", `cd ${HOME}/resizer`, "docker build -t nimbus/resizer:1.0 .", `cd ${HOME}`, "docker run -d --name web -p 8080:80 nginx:1.27", "docker run -d --name resizer nimbus/resizer:1.0",
         (e) => { e.container("resizer").pids = e.pidsFree() + 11 - 20; e.container("resizer").logs.push("resizer: spawn failed: Error: spawn convert EAGAIN"); }, 480, "docker restart web", 2],
-      won: (e) => serves(e, 8080, "Welcome to nginx") && runningOf(e, "quest/resizer").some((c) => c.pidsLimit > 0 && c.pidsLimit <= 4096 && c.pids <= c.pidsLimit),
-      check: (e) => { const c = byImage(e, "quest/resizer")[0]; return { label: "host PIDs free", text: `${Math.max(0, e.pidsFree())}${c ? ` · resizer ${c.pids} (${c.pidsLimit ? "limit " + c.pidsLimit : "no limit"})` : ""}` }; },
+      won: (e) => serves(e, 8080, "Welcome to nginx") && runningOf(e, "nimbus/resizer").some((c) => c.pidsLimit > 0 && c.pidsLimit <= 4096 && c.pids <= c.pidsLimit),
+      check: (e) => { const c = byImage(e, "nimbus/resizer")[0]; return { label: "host PIDs free", text: `${Math.max(0, e.pidsFree())}${c ? ` · resizer ${c.pids} (${c.pidsLimit ? "limit " + c.pidsLimit : "no limit"})` : ""}` }; },
       hints: [
         "curl localhost:8080 hangs. docker logs web: fork() failed (11: Resource temporarily unavailable). Then docker stats --no-stream and read the PIDS column.",
         "resizer holds about 32,000 processes; the kernel allows 32,768 in all. docker update --pids-limit lowers the cap but does not kill processes already running.",
-        "Re-create the resizer with a cap, then restart web: docker rm -f resizer && docker run -d --name resizer --pids-limit 200 quest/resizer:1.0 && docker restart web"
+        "Re-create the resizer with a cap, then restart web: docker rm -f resizer && docker run -d --name resizer --pids-limit 200 nimbus/resizer:1.0 && docker restart web"
       ],
       lesson: "One container can exhaust the host's process table. Give every container a --pids-limit, so a leak or a fork bomb stays inside it.",
       tries: ["curl localhost:8080", "docker logs web", "docker stats --no-stream"]
@@ -3695,30 +3695,30 @@ ${healthcheck ? `    healthcheck:
       won: (e) => Boolean(e.lastBuild && e.lastBuild.user && lastNpm(e) && lastNpm(e).cached),
       check: (e) => ({ label: "npm ci on the last run", text: !e.lastBuild ? "not built yet" : lastNpm(e) && lastNpm(e).cached ? "CACHED" : "ran again" }),
       hints: [
-        "Run docker build -t quest/shop:ci . twice. Even with nothing changed, every step runs again: each CI job starts on a fresh runner with an empty build cache.",
+        "Run docker build -t nimbus/shop:ci . twice. Even with nothing changed, every step runs again: each CI job starts on a fresh runner with an empty build cache.",
         "Keep the cache outside the runner, in the registry: --cache-to exports it and --cache-from imports it. The default docker driver cannot export a cache; a docker-container builder can.",
-        "docker buildx create --name ci --driver docker-container --use, then docker buildx build --cache-from type=registry,ref=ghcr.io/kitchen/shop:buildcache --cache-to type=registry,ref=ghcr.io/kitchen/shop:buildcache,mode=max -t quest/shop:ci . Run it twice."
+        "docker buildx create --name ci --driver docker-container --use, then docker buildx build --cache-from type=registry,ref=ghcr.io/kitchen/shop:buildcache --cache-to type=registry,ref=ghcr.io/kitchen/shop:buildcache,mode=max -t nimbus/shop:ci . Run it twice."
       ],
       lesson: "CI runners forget their build cache. Export it with --cache-to (registry, or type=gha on GitHub) and import it with --cache-from; mode=max keeps the intermediate layers too.",
-      tries: ["docker build -t quest/shop:ci .", "docker buildx ls", "cat Dockerfile"]
+      tries: ["docker build -t nimbus/shop:ci .", "docker buildx ls", "cat Dockerfile"]
     },
     {
       id: "cves", title: "Scan gate fails", level: "15",
-      story: "The pipeline's scan gate (docker scout cves --exit-code --only-severity critical,high) blocks quest/shop: two critical and four high findings, all in packages the app never uses.",
-      goal: "Build quest/shop with no CRITICAL or HIGH findings, still working.",
-      done: "quest/shop passes the scan gate.",
-      edit: ["Dockerfile"], editDir: `${HOME}/shop`, focus: "quest/shop",
+      story: "The pipeline's scan gate (docker scout cves --exit-code --only-severity critical,high) blocks nimbus/shop: two critical and four high findings, all in packages the app never uses.",
+      goal: "Build nimbus/shop with no CRITICAL or HIGH findings, still working.",
+      done: "nimbus/shop passes the scan gate.",
+      edit: ["Dockerfile"], editDir: `${HOME}/shop`, focus: "nimbus/shop",
       files: shopFiles(ORDERED_SHOP.replace("node:22-alpine", "node:22"), NODE_IGNORE, true),
-      setup: [`cd ${HOME}/shop`, "docker build -t quest/shop:1.0 .", 120],
+      setup: [`cd ${HOME}/shop`, "docker build -t nimbus/shop:1.0 .", 120],
       won: (e) => { const img = newestShop(e); return Boolean(img && !gate(e, img).length && e.trial(img).ok); },
-      check: (e) => { const img = newestShop(e) || e.image("quest/shop:1.0"); const g = gate(e, img); return { label: `${e.tagsOf(img)[0]} scan`, text: g.length ? `${g.filter((v) => v[1] === "CRITICAL").length} critical, ${g.filter((v) => v[1] === "HIGH").length} high` : "no critical or high" }; },
+      check: (e) => { const img = newestShop(e) || e.image("nimbus/shop:1.0"); const g = gate(e, img); return { label: `${e.tagsOf(img)[0]} scan`, text: g.length ? `${g.filter((v) => v[1] === "CRITICAL").length} critical, ${g.filter((v) => v[1] === "HIGH").length} high` : "no critical or high" }; },
       hints: [
-        "docker scout cves quest/shop:1.0, then docker scout quickview quest/shop:1.0: every finding comes from the base image, node:22.",
+        "docker scout cves nimbus/shop:1.0, then docker scout quickview nimbus/shop:1.0: every finding comes from the base image, node:22.",
         "node:22 is a full Debian with compilers, git, curl and imagemagick. apt-get upgrade fixes some, but several have no fix yet. Filtering the scan only hides them.",
-        "Change FROM to node:22-slim (or node:22-alpine) in the Dockerfile, then docker build -t quest/shop:1.1 . and scan it again."
+        "Change FROM to node:22-slim (or node:22-alpine) in the Dockerfile, then docker build -t nimbus/shop:1.1 . and scan it again."
       ],
       lesson: "Most vulnerabilities live in packages your app never uses. A smaller base removes them for good; rebuild regularly so fixes arrive, and gate CI on critical and high.",
-      tries: ["docker scout cves quest/shop:1.0", "docker scout quickview quest/shop:1.0", "cat Dockerfile"]
+      tries: ["docker scout cves nimbus/shop:1.0", "docker scout quickview nimbus/shop:1.0", "cat Dockerfile"]
     },
     {
       id: "dockersock", title: "Docker socket in a container", level: "15",
@@ -3728,14 +3728,14 @@ ${healthcheck ? `    healthcheck:
       files: { ...service(`${HOME}/dashboard`, "dashboard.js", "dashboard", "root", 8080, ["express"]), ...service(`${HOME}/socket-proxy`, "proxy.js", "proxy", "root", 2375, ["express"]) },
       setup: ["docker pull alpine:3.20",
         (e) => { for (const d of ["dashboard"]) e.writeFile(`${HOME}/${d}/Dockerfile`, e.host[`${HOME}/${d}/Dockerfile`].text.replace("WORKDIR /app", "RUN apk add --no-cache docker-cli\nWORKDIR /app")); },
-        `cd ${HOME}/dashboard`, "docker build -t quest/dashboard:1.0 .", `cd ${HOME}/socket-proxy`, "docker build -t quest/socket-proxy:1.0 .", `cd ${HOME}`, 60,
-        "docker run -d --name dashboard -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock quest/dashboard:1.0", 30],
-      won: (e) => { const d = runningOf(e, "quest/dashboard").find((c) => c.proc.via === "proxy" && !c.mounts.some((m) => m.source === "/var/run/docker.sock")); return Boolean(d && serves(e, 8080, "containers running:") && e.containers.every((c) => c.proc.app !== "proxy" || ![...c.env].includes("POST=1"))); },
-      check: (e) => { const d = runningOf(e, "quest/dashboard")[0]; return { label: "dashboard access to Docker", text: !d ? "not running" : d.mounts.some((m) => m.source === "/var/run/docker.sock") ? "full control (socket mounted)" : d.proc.via === "proxy" ? "read-only, through the proxy" : "none" }; },
+        `cd ${HOME}/dashboard`, "docker build -t nimbus/dashboard:1.0 .", `cd ${HOME}/socket-proxy`, "docker build -t nimbus/socket-proxy:1.0 .", `cd ${HOME}`, 60,
+        "docker run -d --name dashboard -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock nimbus/dashboard:1.0", 30],
+      won: (e) => { const d = runningOf(e, "nimbus/dashboard").find((c) => c.proc.via === "proxy" && !c.mounts.some((m) => m.source === "/var/run/docker.sock")); return Boolean(d && serves(e, 8080, "containers running:") && e.containers.every((c) => c.proc.app !== "proxy" || ![...c.env].includes("POST=1"))); },
+      check: (e) => { const d = runningOf(e, "nimbus/dashboard")[0]; return { label: "dashboard access to Docker", text: !d ? "not running" : d.mounts.some((m) => m.source === "/var/run/docker.sock") ? "full control (socket mounted)" : d.proc.via === "proxy" ? "read-only, through the proxy" : "none" }; },
       hints: [
         "See what the mount allows: docker exec dashboard docker run --rm -v /:/host alpine:3.20 cat /host/etc/shadow. Whoever controls the dashboard can start any container, and so owns the host.",
-        "Mounting the socket :ro changes nothing: read-only applies to the file, not to the API calls sent through it. Put a gatekeeper in between: quest/socket-proxy allows reads when CONTAINERS=1 and blocks writes unless POST=1.",
-        "docker network create dash && docker run -d --name socket-proxy --network dash -e CONTAINERS=1 -v /var/run/docker.sock:/var/run/docker.sock quest/socket-proxy:1.0 && docker rm -f dashboard && docker run -d --name dashboard --network dash -p 8080:8080 -e DOCKER_HOST=tcp://socket-proxy:2375 quest/dashboard:1.0"
+        "Mounting the socket :ro changes nothing: read-only applies to the file, not to the API calls sent through it. Put a gatekeeper in between: nimbus/socket-proxy allows reads when CONTAINERS=1 and blocks writes unless POST=1.",
+        "docker network create dash && docker run -d --name socket-proxy --network dash -e CONTAINERS=1 -v /var/run/docker.sock:/var/run/docker.sock nimbus/socket-proxy:1.0 && docker rm -f dashboard && docker run -d --name dashboard --network dash -p 8080:8080 -e DOCKER_HOST=tcp://socket-proxy:2375 nimbus/dashboard:1.0"
       ],
       lesson: "Access to the Docker socket is root on the host, read-only mount or not. Give tools that only read a socket proxy that allows exactly the API calls they need.",
       tries: ["docker inspect dashboard --format '{{json .Mounts}}'", "docker exec dashboard docker ps", "curl localhost:8080"]
@@ -3780,7 +3780,7 @@ ${healthcheck ? `    healthcheck:
     const userNet = Object.values(e.networks).find((n) => n.user);
     const v = {
       name: trouble && trouble.name, image: trouble ? trouble.image : e.scenario.focus ? `${e.scenario.focus}:1.0` : null,
-      network: userNet ? userNet.name : "app-net", volume: Object.keys(e.volumes).find((n) => !e.volumes[n].anon) || "app-data", tag: "quest/demo:1.0"
+      network: userNet ? userNet.name : "app-net", volume: Object.keys(e.volumes).find((n) => !e.volumes[n].anon) || "app-data", tag: "nimbus/demo:1.0"
     };
     return cmd.replace(/<([a-z]+)>/g, (m, k) => (v[k] == null ? m : String(v[k])));
   }
@@ -4016,7 +4016,7 @@ ${healthcheck ? `    healthcheck:
     goal.className = "pg-goal done";
     print("");
     print("✓ Fixed. " + scenario.lesson, "ok");
-    const lv = (window.QUEST && window.QUEST.levels.find((l) => l.id === scenario.level)) || null;
+    const lv = (window.TRACK && window.TRACK.levels.find((l) => l.id === scenario.level)) || null;
     if (lv) print(`  Practise it on your own machine in Level ${lv.id} · ${lv.title}.`, "dim");
     const next = SCENARIOS.find((s) => !saved.get().includes(s.id));
     print(next ? `  Next scenario: ${next.title}. Pick it above, or type 'next'.` : "  You solved every scenario. Try the labs on your own machine next.", "dim");
