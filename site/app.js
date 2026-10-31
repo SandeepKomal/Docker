@@ -155,12 +155,13 @@
         box.append(h("h3.stage", { id: stageId(stage) }, stage), list);
       }
       const isDone = done.has(lv.id);
-      list.append(h("li.level" + (isDone ? ".done" : ""), null,
+      list.append(h("li.level" + (isDone ? ".done" : ""), { id: "lv-" + lv.id },
         h("input", {
           type: "checkbox", checked: isDone, "aria-label": `Mark level ${lv.id} complete`,
           onchange: (e) => {
             if (e.target.checked) done.add(lv.id); else done.delete(lv.id);
             store.set("done", [...done]);
+            if (e.target.checked) window.DQEngage.active();
             renderPath();
           }
         }),
@@ -169,7 +170,7 @@
           h("summary", null, h("span.title", null, lv.title), h("span.topic", null, lv.topic)),
           h("div.level-body", null,
             h("div", null, h("h4", null, "What you learn"), h("ul", null, lv.learn.map((t) => h("li", null, ...rich(t))))),
-            h("div", null, h("h4", null, "Lab on your machine"), h("pre", null, h("code", null, lv.lab.join("\n")))),
+            h("div", null, h("h4", null, "Lab on your machine"), window.DQEngage.order(lv, h("pre", null, h("code", null, lv.lab.join("\n"))))),
             h("p.level-links", null, h("a", { href: repoUrl(lv.docs) }, `Guide: ${lv.docs}`)),
             practiseRow(lv.practise, "Practise in the playground:"))),
         h("span.actions", null,
@@ -234,6 +235,7 @@
         const all = store.get("quiz", {});
         all[mode] = Math.max(all[mode] || 0, pct);
         store.set("quiz", all);
+        window.DQEngage.active();
         renderPath();
       }
       score.append(h("p.result", null, h("strong", null, `${pct}%. `),

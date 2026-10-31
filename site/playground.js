@@ -4005,6 +4005,7 @@ ${healthcheck ? `    healthcheck:
     if (solved || !scenario.won(engine)) return;
     solved = true;
     saved.add(scenario.id);
+    document.dispatchEvent(new CustomEvent("dq:solved", { detail: scenario.id }));
     renderPicker();
     const b = picker.querySelector('.pg-scn[aria-pressed="true"]');
     if (b) {
@@ -4075,7 +4076,7 @@ ${healthcheck ? `    healthcheck:
 
   const reveal = () => { term.scrollIntoView({ block: "center" }); input.focus({ preventScroll: true }); };
   window.DQPlayground = {
-    scenarios: SCENARIOS.map((s) => ({ id: s.id, title: s.title })),
+    scenarios: SCENARIOS.map((s) => ({ id: s.id, title: s.title, story: s.story })),
     load: (id) => { load(id); reveal(); },
     // From a #play/<id> link.
     open: (id) => { if (SCENARIOS.some((s) => s.id === id)) { if (id !== scenario.id) load(id); reveal(); } },
