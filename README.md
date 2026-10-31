@@ -1,25 +1,61 @@
-# Docker — Practical Docker Learning & DevOps Guide
+# DevOps Nimbus Docker
 
-A hands-on Docker reference covering **Docker commands, images, containers, Dockerfiles, networking, volumes, cleanup, Docker Compose, installation, multi-stage builds, and containerized application patterns**.
+**Docker, zero to on-call.** Practical Docker commands, Dockerfiles and Compose examples, plus a free browser site with a playground of real container incidents, for DevOps and cloud engineers learning containers.
 
-This repository is a practical companion for DevOps and cloud engineers who want reusable Docker examples rather than only theory.
+[![Learning site](https://img.shields.io/badge/learn-DevOps%20Nimbus-1d1d1f)](https://sandeepkomal.github.io/Docker/)
+[![CI](https://github.com/SandeepKomal/Docker/actions/workflows/ci.yml/badge.svg)](https://github.com/SandeepKomal/Docker/actions/workflows/ci.yml)
+[![Pages](https://github.com/SandeepKomal/Docker/actions/workflows/pages.yml/badge.svg)](https://github.com/SandeepKomal/Docker/actions/workflows/pages.yml)
+[![Docker](https://img.shields.io/badge/Docker-containers-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+![No trackers](https://img.shields.io/badge/site-no%20trackers%20%C2%B7%20no%20cookies-2ea44f)
+[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen)](CONTRIBUTING.md)
+![Last commit](https://img.shields.io/github/last-commit/SandeepKomal/Docker)
+[![GitHub stars](https://img.shields.io/github/stars/SandeepKomal/Docker?style=social)](https://github.com/SandeepKomal/Docker/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/SandeepKomal/Docker?style=social)](https://github.com/SandeepKomal/Docker/network/members)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/SandeepKomal/Docker)
 
-## DevOps Nimbus Docker: zero to on-call, in your browser
+**[Open the learning site](https://sandeepkomal.github.io/Docker/)** · [Troubleshoot an error](https://sandeepkomal.github.io/Docker/#doctor) · [Every error on one page](https://sandeepkomal.github.io/Docker/problems.html) · [All DevOps Nimbus tracks](https://sandeepkomal.github.io/devops-nimbus/)
+
+## Contents
+
+- [Learn it in your browser](#learn-it-in-your-browser)
+- [What's in this repository](#whats-in-this-repository)
+- [Quick start](#quick-start)
+- [Build an image](#build-an-image)
+- [Docker Compose](#docker-compose)
+- [Docker networking](#docker-networking)
+- [Persistent storage](#persistent-storage)
+- [Multi-stage builds](#multi-stage-builds)
+- [Cleanup](#cleanup)
+- [Production-oriented guides](#production-oriented-guides)
+- [Learning roadmap](#learning-roadmap)
+- [Who is this for?](#who-is-this-for)
+- [Repository layout](#repository-layout)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [Security](#security)
+- [Privacy and cost](#privacy-and-cost)
+- [License and trademarks](#license-and-trademarks)
+- [Author and contributors](#author-and-contributors)
+
+## Learn it in your browser
 
 The [DevOps Nimbus Docker site](https://sandeepkomal.github.io/Docker/) (source in [`site/`](./site/)) turns this repository into a hands-on course:
 
 - **Playground**: a `docker` CLI over a modelled engine with 46 real incidents, from a container that exits at once to OOM kills, Compose start order, registry limits and security hardening. Every scenario has its own link (`#play/<id>`).
 - **Troubleshoot**: paste an error message and get what it means, how to confirm it, the fix and how to prevent it. Every problem has its own link (`#fix/<id>`), and all of them are on one plain page, [problems.html](https://sandeepkomal.github.io/Docker/problems.html).
 - **Dockerfile X-ray**, a **quiz** for each of the 17 levels, a **cheat sheet** whose commands run in the playground, and an **architecture** diagram.
+- **Scoreboard**: a score, a skill radar, learning uptime and on-call shifts against the clock; **Download my progress** and **Load my progress** move it to another device.
 
-Nothing is installed and nothing leaves your browser. To run the checks locally (Node.js, no dependencies):
+Nothing is installed and nothing leaves your browser.
 
-```bash
-node tests/check_site_data.js && node tests/check_playground.js && node tests/check_xray.js && node tests/fuzz_playground.js
-node tools/build-problems.js   # after changing troubleshooting entries in site/data.js
-```
+## What's in this repository
 
-## What you'll learn
+A hands-on Docker reference covering **Docker commands, images, containers, Dockerfiles, networking, volumes, cleanup, Docker Compose, installation, multi-stage builds, and containerized application patterns**.
+
+This repository is a practical companion for DevOps and cloud engineers who want reusable Docker examples rather than only theory.
+
+### What you'll learn
 
 - Docker CLI fundamentals
 - Images and containers
@@ -31,22 +67,6 @@ node tools/build-problems.js   # after changing troubleshooting entries in site/
 - Docker cleanup and disk-space management
 - Container troubleshooting
 - Image optimization and security practices
-
-## Repository map
-
-| Area | Path |
-|---|---|
-| Docker commands | [docker-commands.md](./docker-commands.md) |
-| Docker installation | [docker_installation.md](./docker_installation.md) |
-| Ubuntu installation | [docker_installation_ubuntu.md](./docker_installation_ubuntu.md) |
-| Networking | [Docker Networks](./Docker%20Networks) |
-| Volumes | [docker volumes.md](./docker%20volumes.md) |
-| Cleanup | [docker cleanup commands](./docker%20cleanup%20commands) |
-| Docker Compose | [docker-compose/](./docker-compose/) |
-| Dockerfile examples | [Dockerfile's/](./Dockerfile's/) |
-| Security guide | [docs/security.md](./docs/security.md) |
-| Troubleshooting | [docs/troubleshooting.md](./docs/troubleshooting.md) |
-| Image optimization | [docs/image-optimization.md](./docs/image-optimization.md) |
 
 ## Quick start
 
@@ -197,26 +217,60 @@ Docker basics
 - Docker beginners
 - Engineers preparing for Docker/Kubernetes interviews
 
+## Repository layout
+
+| Area | Path |
+|---|---|
+| Docker commands | [docker-commands.md](./docker-commands.md) |
+| Docker installation | [docker_installation.md](./docker_installation.md) |
+| Ubuntu installation | [docker_installation_ubuntu.md](./docker_installation_ubuntu.md) |
+| Networking | [Docker Networks](./Docker%20Networks) |
+| Volumes | [docker volumes.md](./docker%20volumes.md) |
+| Cleanup | [docker cleanup commands](./docker%20cleanup%20commands) |
+| Docker Compose | [docker-compose/](./docker-compose/) |
+| Dockerfile examples | [Dockerfile's/](./Dockerfile's/) |
+| Security guide | [docs/security.md](./docs/security.md) |
+| Troubleshooting | [docs/troubleshooting.md](./docs/troubleshooting.md) |
+| Image optimization | [docs/image-optimization.md](./docs/image-optimization.md) |
+
+## Troubleshooting
+
+- Paste an error into the site's [Troubleshoot](https://sandeepkomal.github.io/Docker/#doctor) tab, or browse [every error on one page](https://sandeepkomal.github.io/Docker/problems.html).
+- For diagnosing real containers, see [docs/troubleshooting.md](./docs/troubleshooting.md).
+
 ## Contributing
 
 Practical improvements, corrections, new examples, and documentation updates are welcome.
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
+To run the checks locally (Node.js, no dependencies):
+
+```bash
+node tests/check_site_data.js && node tests/check_playground.js && node tests/check_xray.js && node tests/fuzz_playground.js
+node tools/build-problems.js   # after changing troubleshooting entries in site/data.js
+```
+
 ## Security
 
 Never commit passwords, API keys, access tokens, private keys, registry credentials, or real environment files.
 
-See [SECURITY.md](./SECURITY.md).
+See [SECURITY.md](./SECURITY.md). To report a vulnerability, contact the repository owner privately through GitHub rather than opening a public issue. CI runs the site tests; no separate security scanners run in CI.
 
-## Support the project
+## Privacy and cost
 
-If this repository helps you learn Docker or solve a containerization problem, consider giving it a **star**. It helps other engineers discover the material and motivates continued improvements.
+The site runs entirely in your browser: no accounts, cookies, trackers or database. Your progress stays in your own browser's storage. It is hosted free on GitHub Pages, and nothing in this repository costs money to use.
 
-## Author
+## License and trademarks
 
-**Sandeep Komal**
+MIT. See [LICENSE](./LICENSE). Docker® is a trademark of Docker, Inc. This project is independent and not affiliated with Docker, Inc.
+
+## Author and contributors
+
+**Sandeep Komal** · [github.com/SandeepKomal](https://github.com/SandeepKomal)
 
 Cloud / DevOps Engineer focused on AWS, Kubernetes, Terraform, CI/CD, automation, and DevSecOps.
 
-- GitHub: [@SandeepKomal](https://github.com/SandeepKomal)
+Built and maintained with [DevopsNimbus](https://github.com/DevopsNimbus). See everyone who has contributed in the [contributors graph](https://github.com/SandeepKomal/Docker/graphs/contributors).
+
+If this repository helps you learn Docker or solve a containerization problem, consider giving it a **star**. It helps other engineers discover the material and motivates continued improvements.
