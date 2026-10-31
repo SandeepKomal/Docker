@@ -66,7 +66,6 @@
   };
 
   const repoUrl = (p) => `${Q.repo}/${/\.[a-z]+$|^Docker Networks$/.test(p) ? "blob" : "tree"}/main/${p.split("/").map(encodeURIComponent).join("/")}`;
-  $("#gh-link").href = Q.repo;
   document.querySelectorAll("[data-repo]").forEach((a) => { a.href = Q.repo + a.dataset.repo; });
 
   // --- tabs ----------------------------------------------------------------

@@ -209,7 +209,40 @@
         stat(`${sc.levels}/${Q.levels.length}`, "levels done"),
         stat(`${sc.passed}/${Q.levels.length}`, "quizzes passed"),
         stat(String(shifts.count), shifts.best ? `shifts · best ${clock(shifts.best)}` : "on-call shifts"),
-        stat(`${st.now}d`, `streak · best ${st.best}d`)));
+        stat(`${st.now}d`, `streak · best ${st.best}d`)),
+      carry());
+  }
+
+  // --- carry progress to another device as a file the learner keeps ---------
+  function download() {
+    const data = {};
+    for (const k of Object.keys(localStorage)) if (k.startsWith(PREFIX)) data[k] = localStorage.getItem(k);
+    const url = URL.createObjectURL(new Blob([JSON.stringify({ site: PREFIX, saved: today(), data })], { type: "application/json" }));
+    h("a", { href: url, download: `devops-nimbus-${PREFIX.slice(3, -1)}-progress.json` }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  // Only this track's keys with valid JSON values are accepted; anything else changes nothing.
+  function load(file, msg) {
+    if (!file) return;
+    if (file.size > 256e3) { msg.textContent = "That file is too big to be a progress file. Nothing was changed."; return; }
+    file.text().then((text) => {
+      const f = JSON.parse(text);
+      const entries = Object.entries(f && f.site === PREFIX && typeof f.data === "object" ? f.data : {})
+        .filter(([k, v]) => k.startsWith(PREFIX) && typeof v === "string" && JSON.parse(v) !== undefined);
+      if (!entries.length) throw new Error("not a progress file");
+      if (!confirm("Replace the progress in this browser with the one in the file?")) return;
+      for (const k of Object.keys(localStorage)) if (k.startsWith(PREFIX)) localStorage.removeItem(k);
+      for (const [k, v] of entries) localStorage.setItem(k, v);
+      location.reload();
+    }).catch(() => { msg.textContent = "That is not a progress file for this track. Nothing was changed."; });
+  }
+  function carry() {
+    const msg = h("span.eng-msg", { "aria-live": "polite" }, "Progress lives in this browser. Keep a copy to move it to another device.");
+    return h("div.eng-carry", null,
+      h("button.pill.small-pill", { type: "button", onclick: download }, "Download my progress"),
+      h("label.pill.small-pill.eng-file", null, "Load my progress",
+        h("input", { type: "file", accept: "application/json,.json", onchange: (e) => { load(e.target.files[0], msg); e.target.value = ""; } })),
+      msg);
   }
 
   function openLevel(id) {
