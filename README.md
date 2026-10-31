@@ -259,7 +259,7 @@ See [SECURITY.md](./SECURITY.md). To report a vulnerability, contact the reposit
 
 ## Privacy and cost
 
-The site runs entirely in your browser: no accounts, cookies, trackers or database. Your progress stays in your own browser's storage. It is hosted free on GitHub Pages, and nothing in this repository costs money to use.
+The site runs entirely in your browser: no accounts, cookies, trackers or database. Your progress stays in your own browser's storage. It is hosted free on GitHub Pages, and nothing in this repository costs money to use. See [PRIVACY.md](PRIVACY.md) for the full privacy policy.
 
 ## License and trademarks
 

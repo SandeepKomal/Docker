@@ -10,3 +10,7 @@ Before opening a pull request:
 2. Test commands or examples where practical.
 3. Do not commit secrets or real environment files.
 4. Keep examples focused and reproducible.
+
+## Personal data
+
+Never include real personal data in issues, pull requests, examples, logs or tests: no Aadhaar, PAN, phone numbers, personal emails, addresses, bank details or customer records. Use made-up values and reserved domains such as `example.com`. See [PRIVACY.md](PRIVACY.md).
