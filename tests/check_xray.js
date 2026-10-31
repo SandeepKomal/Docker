@@ -12,7 +12,7 @@ require(path.join(root, "site/xray.js"));
 global.window = {};
 require(path.join(root, "site/data.js"));
 const { explain } = globalThis.DQExplain;
-const Q = window.QUEST;
+const Q = window.TRACK;
 
 const sample = `# syntax=docker/dockerfile:1
 FROM node:latest

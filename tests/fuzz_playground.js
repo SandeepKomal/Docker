@@ -17,7 +17,7 @@ const WORDS = ["docker", "run", "create", "start", "stop", "restart", "kill", "r
   "-p", "8080:80", "3000:3000", "80", "-v", "/home/dev/shop:/app", "/app/node_modules", "data:/data", "-e", "A=1", "--name", "web", "api", "cache", "shop", "report", "uploader",
   "--network", "app-net", "bridge", "host", "none", "--memory", "512m", "1g", "--memory-swap", "-1", "--rm", "--restart", "always", "-u", "0", "10001", "--format",
   "{{.State.Status}}", "{{json .Mounts}}", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", "{{.Nope}}", "{{", "nginx:1.27", "nginx", "redis:7.4", "alpine",
-  "quest/shop:1.0", "node:22-alpine", "sh", "-c", "ls", "cat", "id", "env", "ping", "nslookup", "wget", "curl", "localhost:8080", "http://cache:6379", ".", "-t", "x:1",
+  "nimbus/shop:1.0", "node:22-alpine", "sh", "-c", "ls", "cat", "id", "env", "ping", "nslookup", "wget", "curl", "localhost:8080", "http://cache:6379", ".", "-t", "x:1",
   "--no-cache", "--target", "deps", "&&", ";", "|", "grep", "head", "-n", "2", "wc", "-l", ">", ">>", "out.txt", "Dockerfile", ".dockerignore", "sudo", "chown", "chmod",
   "777", "o+w", "/srv/uploads", "cd", "..", "/", "~", "echo", "printf", "touch", "mkdir", "-p", "du", "-sh", "sed", "-i", "s/a/b/", "npm", "'", "\"", "\\", "$(pwd)", "--", "-",
   "compose", "up", "down", "-v", "config", "restart", "exec", "db", "pg_isready", "login", "logout", "ghcr.io", "--password-stdin", "-u", "$GHCR_TOKEN", "systemctl", "start", "status",
@@ -44,7 +44,7 @@ for (let i = 0; i < rounds; i++) {
     if (rand(6) === 0) {
       e.writeFile("/home/dev/shop/Dockerfile", Array.from({ length: 1 + rand(9) }, () => pick(LINES)).join(pick(["\n", "\r\n"])));
       e.cwd = "/home/dev/shop";
-      line = pick(["docker build -t quest/shop:9 .", "docker build --target deps .", "docker build -f Dockerfile .", "docker build -t BAD .", "docker build"]);
+      line = pick(["docker build -t nimbus/shop:9 .", "docker build --target deps .", "docker build -f Dockerfile .", "docker build -t BAD .", "docker build"]);
     } else if (rand(8) === 0) {
       e.writeFile(`${e.cwd}/compose.yaml`, Array.from({ length: 1 + rand(14) }, () => pick(YAML)).join("\n"));
       line = pick(["docker compose up -d", "docker compose up", "docker compose ps -a", "docker compose down -v", "docker compose config", "docker compose logs", "docker compose exec db pg_isready"]);

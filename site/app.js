@@ -2,7 +2,7 @@
 "use strict";
 
 (function () {
-  const Q = window.QUEST;
+  const Q = window.TRACK;
   const $ = (sel) => document.querySelector(sel);
   const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
   const scrollToEl = (el) => el.scrollIntoView({ block: "start", behavior: still() ? "auto" : "smooth" });
@@ -127,7 +127,7 @@
       draw(on ? Q.signature.after : Q.signature.before);
     });
     $("#stage").replaceChildren(
-      h("div.stage-bar", null, h("div", null, h("strong", { id: "stage-title" }, "quest/shop"), h("div", null, "Each bar is a layer, as wide as what it adds.")), toggle),
+      h("div.stage-bar", null, h("div", null, h("strong", { id: "stage-title" }, "nimbus/shop"), h("div", null, "Each bar is a layer, as wide as what it adds.")), toggle),
       list, h("div.total", null, h("span", null, "Image size"), total),
       h("a.stage-try", { href: "#play/bigimage" }, "Shrink it yourself in the playground"));
     draw(Q.signature.before);
@@ -155,12 +155,13 @@
         box.append(h("h3.stage", { id: stageId(stage) }, stage), list);
       }
       const isDone = done.has(lv.id);
-      list.append(h("li.level" + (isDone ? ".done" : ""), null,
+      list.append(h("li.level" + (isDone ? ".done" : ""), { id: "lv-" + lv.id },
         h("input", {
           type: "checkbox", checked: isDone, "aria-label": `Mark level ${lv.id} complete`,
           onchange: (e) => {
             if (e.target.checked) done.add(lv.id); else done.delete(lv.id);
             store.set("done", [...done]);
+            if (e.target.checked) window.DQEngage.active();
             renderPath();
           }
         }),
@@ -169,7 +170,7 @@
           h("summary", null, h("span.title", null, lv.title), h("span.topic", null, lv.topic)),
           h("div.level-body", null,
             h("div", null, h("h4", null, "What you learn"), h("ul", null, lv.learn.map((t) => h("li", null, ...rich(t))))),
-            h("div", null, h("h4", null, "Lab on your machine"), h("pre", null, h("code", null, lv.lab.join("\n")))),
+            h("div", null, h("h4", null, "Lab on your machine"), window.DQEngage.order(lv, h("pre", null, h("code", null, lv.lab.join("\n"))))),
             h("p.level-links", null, h("a", { href: repoUrl(lv.docs) }, `Guide: ${lv.docs}`)),
             practiseRow(lv.practise, "Practise in the playground:"))),
         h("span.actions", null,
@@ -203,7 +204,7 @@
   // --- quiz ----------------------------------------------------------------
 
   const EXAM_SIZE = 20;
-  const questionsFor = (id) => (window.QUEST_QUIZ[id] || []).map((item) => ({ ...item, level: id }));
+  const questionsFor = (id) => (window.TRACK_QUIZ[id] || []).map((item) => ({ ...item, level: id }));
   function shuffle(list) {
     const a = [...list];
     for (let i = a.length - 1; i > 0; i--) {
@@ -234,6 +235,7 @@
         const all = store.get("quiz", {});
         all[mode] = Math.max(all[mode] || 0, pct);
         store.set("quiz", all);
+        window.DQEngage.active();
         renderPath();
       }
       score.append(h("p.result", null, h("strong", null, `${pct}%. `),

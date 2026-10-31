@@ -1,6 +1,6 @@
 // Question bank for the Docker Quest quiz: q, options, answer (index), why. Plain data, no logic.
 "use strict";
-window.QUEST_QUIZ = {
+window.TRACK_QUIZ = {
   "00": [
     { q: "What is the difference between an image and a container?",
       options: [

@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Docker Quest">
-  <title>Docker Quest</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Docker">
+  <title>Docker</title>
   <rect x="2" y="2" width="60" height="60" rx="16" fill="#00708a"/>
   <rect x="14" y="14" width="20" height="9" rx="3" fill="#fff" fill-opacity=".62"/>
   <rect x="14" y="27.5" width="28" height="9" rx="3" fill="#fff" fill-opacity=".8"/>

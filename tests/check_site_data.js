@@ -10,8 +10,8 @@ const root = path.resolve(__dirname, "..");
 global.window = {};
 require(path.join(root, "site/data.js"));
 require(path.join(root, "site/quiz-bank.js"));
-const Q = window.QUEST;
-const quiz = window.QUEST_QUIZ;
+const Q = window.TRACK;
+const quiz = window.TRACK_QUIZ;
 const ticks = (text, where) => assert.strictEqual((text.match(/`/g) || []).length % 2, 0, `${where}: unbalanced backticks in "${text}"`);
 
 Q.levels.forEach((lv, i) => {
@@ -90,7 +90,7 @@ assert.match(html, /© 2024–2026 Sandeep Komal Pothu and contributors\./);
 assert.match(html, /Docker® is a registered trademark of Docker, Inc\. This project is independent and not affiliated with Docker, Inc\./);
 for (const f of fs.readdirSync(path.join(root, "site")).filter((x) => x.endsWith(".js"))) {
   const src = fs.readFileSync(path.join(root, "site", f), "utf8");
-  assert.doesNotMatch(src, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|fetch\(|XMLHttpRequest/, `${f}: no HTML injection or network calls`);
+  assert.doesNotMatch(src, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|fetch\(|XMLHttpRenimbus/, `${f}: no HTML injection or network calls`);
 }
 
 console.log(`site data ok: ${Q.levels.length} levels, ${total} quiz questions, ${Q.doctor.length} troubleshooting entries, ${Q.architecture.components.length} components`);

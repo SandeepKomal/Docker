@@ -4,7 +4,7 @@
 
 (function () {
   const { h, rich, practiseRow } = window.DQUI;
-  const parts = Object.fromEntries(window.QUEST.architecture.components.map((c) => [c.id, c]));
+  const parts = Object.fromEntries(window.TRACK.architecture.components.map((c) => [c.id, c]));
   const root = document.getElementById("arch");
 
   const NS = "http://www.w3.org/2000/svg";
