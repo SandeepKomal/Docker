@@ -89,7 +89,11 @@
     }
     current = tab;
     for (const t of tabs) $("#tab-" + t).hidden = t !== tab;
-    document.querySelectorAll("nav a").forEach((a) => {
+    const fixTabs = [...document.querySelectorAll(".mode.fix a[data-tab]")].map((a) => a.dataset.tab);
+    const mode = fixTabs.includes(tab) ? "fix" : "learn";
+    document.documentElement.dataset.mode = mode;
+    document.querySelectorAll(".sw").forEach((a) => (a.classList.contains(mode) ? a.setAttribute("aria-current", "true") : a.removeAttribute("aria-current")));
+    document.querySelectorAll(".subnav a").forEach((a) => {
       if (a.dataset.tab === tab) a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
     });
