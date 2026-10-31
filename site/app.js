@@ -514,7 +514,7 @@
     { label: "Your path", kind: "Section", run: () => goTab("path", () => $("#path-title").scrollIntoView()) },
     { label: "Exam: random questions from every level", kind: "Quiz", run: () => goTab("quiz", () => { $("#quiz-level").value = "exam"; renderQuiz(); }) },
     { label: "Dockerfile X-ray", kind: "Section", run: () => goTab("xray") },
-    { label: "Troubleshoot: stuck on an error?", kind: "Section", run: () => goTab("doctor") },
+    { label: "Fix: troubleshoot an error", kind: "Section", run: () => goTab("doctor") },
     { label: "Cheat sheet", kind: "Section", run: () => goTab("cheats", () => $("#cheat-q").focus()) },
     { label: "Docker architecture: every component explained", kind: "Section", run: () => goTab("arch") },
     ...Q.levels.map((lv) => ({ label: `${lv.id} · ${lv.title}`, hint: lv.topic, kind: "Level", run: () => goTab("path", () => scrollToEl(document.getElementById(stageId(lv.stage)))) })),
@@ -590,6 +590,10 @@
   $("#doctor-list").before(h("div.doctor-practise", { id: "doctor-best", "aria-live": "polite" }));
   $("#doctor-list").after(h("p.muted", { id: "doctor-none", hidden: true }, "No problem matches. Paste the error line itself, or try an exit code (137), a word (denied, refused) or a thing (port, volume)."));
   $("#doctor-q").addEventListener("input", renderDoctorList);
+  // The home page's "Something broken?" box hands the pasted error to Troubleshoot.
+  const doorGo = () => { $("#doctor-q").value = $("#door-q").value; goTab("doctor", () => { renderDoctorList(); $("#doctor-q").focus(); }); };
+  $("#door-go").addEventListener("click", doorGo);
+  $("#door-q").addEventListener("keydown", (e) => { if (e.key === "Enter") doorGo(); });
   $("#cheat-q").addEventListener("input", renderCheats);
   renderFill();
   $("#cheat-fill-box").open = matchMedia("(min-width: 721px)").matches || Object.keys(fills).length > 0;

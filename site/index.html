@@ -23,13 +23,18 @@
         Docker Quest
       </a>
       <nav aria-label="Sections">
-        <a href="#path" data-tab="path">Path</a>
-        <a href="#quiz" data-tab="quiz">Quiz</a>
-        <a href="#xray" data-tab="xray">Dockerfile X-ray</a>
-        <a href="#arch" data-tab="arch">Docker arch</a>
-        <span class="nav-sep" aria-hidden="true"></span>
-        <a class="ref" href="#doctor" data-tab="doctor">Troubleshoot</a>
-        <a class="ref" href="#cheats" data-tab="cheats">Cheat sheet</a>
+        <div class="mode learn" role="group" aria-label="Learn">
+          <span class="mode-k">Learn</span>
+          <a href="#path" data-tab="path">Path</a>
+          <a href="#quiz" data-tab="quiz">Quiz</a>
+          <a href="#xray" data-tab="xray">Dockerfile X-ray</a>
+          <a href="#arch" data-tab="arch">Docker arch</a>
+        </div>
+        <div class="mode fix" role="group" aria-label="Fix">
+          <span class="mode-k">Fix</span>
+          <a href="#doctor" data-tab="doctor">Troubleshoot</a>
+          <a href="#cheats" data-tab="cheats">Cheat sheet</a>
+        </div>
       </nav>
       <button type="button" class="kbd-btn" id="palette-open" aria-label="Search the site (Ctrl+K)"><span>Search</span><kbd id="palette-key">Ctrl K</kbd></button>
       <a class="gh" id="gh-link" href="#">GitHub</a>
@@ -42,9 +47,19 @@
         <p class="eyebrow">Docker Quest</p>
         <h1>Build it small.<br>Run it safe.</h1>
         <p class="sub">Images, layers, networks and volumes, learned by fixing containers that misbehave. In your browser, with real docker commands and real errors.</p>
-        <div class="ctas">
-          <a class="pill primary" href="#path-title">Start the path</a>
-          <a class="more" href="#pg-title">Try a scenario</a>
+        <div class="doors">
+          <div class="door learn">
+            <p class="door-k">Learning Docker?</p>
+            <h2>Start from zero, step by step.</h2>
+            <p>Levels in order, each with a hands-on incident to fix in your browser.</p>
+            <div class="ctas"><a class="pill primary" href="#path-title">Start the path</a><a class="more" href="#pg-title">Try a scenario</a></div>
+          </div>
+          <div class="door fix">
+            <p class="door-k">Something broken right now?</p>
+            <h2>Paste the error, get the fix.</h2>
+            <p>The cause, the commands to confirm it and the fix, for every common Docker error.</p>
+            <div class="door-search"><input id="door-q" type="search" placeholder="Paste an error, e.g. port is already allocated" aria-label="Paste an error" autocomplete="off"><button type="button" class="pill" id="door-go">Find the fix</button></div>
+          </div>
         </div>
         <div class="stage" id="stage" aria-labelledby="stage-title"></div>
         <div class="stats" id="stats"></div>
@@ -176,6 +191,7 @@ docker builder prune</code></pre>
     </section>
 
     <section id="tab-doctor" class="tab" hidden>
+      <p class="mode-banner"><strong>Fix mode.</strong> For when something is broken right now. Learning Docker instead? <a href="#path">Start the path</a>.</p>
       <h2>Stuck on an error?</h2>
       <p class="lede">Paste the error you see, or pick a symptom. Each answer explains why it happens, how to confirm it and how to fix and prevent it, then gives you a safe scenario to break and fix it yourself, so you recognise it next time. Every problem has its own link. There is also a <a href="problems.html">plain page of every problem</a>.</p>
       <div class="guide-slot" data-guide="doctor"></div>
