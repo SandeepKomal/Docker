@@ -683,3 +683,15 @@ kbd { font: 500 .72rem/1 "SF Mono", ui-monospace, Menlo, Consolas, monospace; le
 .door.fix .pill { background: var(--on-oncall); color: var(--oncall); border-color: transparent; font-weight: 600; }
 .door.fix .pill:hover { background: color-mix(in srgb, var(--on-oncall) 88%, var(--oncall)); }
 .door.fix input[type="search"] { border-color: transparent; }
+
+/* Header brand: a round back button and "DevOps Nimbus" go to all tracks; the track name goes to this track's start. */
+.brand > a { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+.brand-hub { color: inherit; }
+.brand-back { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--code-bg); color: var(--text); transition: background .2s, transform .2s; }
+.brand-back svg { display: block; margin-left: -1px; }
+.brand-hub:hover .brand-back { background: var(--line); transform: translateX(-2px); }
+.brand > a:hover { text-decoration: none; }
+.brand-hub:hover > span:not(.brand-back) { opacity: .75; }
+.brand-hub:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (prefers-reduced-motion: reduce) { .brand-back { transition: none; } }
