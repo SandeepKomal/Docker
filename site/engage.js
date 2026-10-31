@@ -1,5 +1,5 @@
 // Learning loop: continue where you left off, an on-call shift against the clock,
-// a score and an activity graph, and a "put the lab in order" check in every level.
+// a score, a skill radar and a learning-uptime status page, and a "put the lab in order" check in every level.
 // Everything stays in this browser under the site's own storage prefix.
 "use strict";
 (function () {
@@ -133,31 +133,79 @@
       h("p.eng-session", null, `This session: ${gained > 0 ? "+" + gained : "0"} points · ${Math.max(1, Math.round((Date.now() - session.at) / 60000))} min`));
   }
 
-  // --- scoreboard: a year of practice, like a contribution graph --------------
-  function board() {
+  // --- scoreboard: a skill radar and a status page for your own learning ----
+  const svg = (tag, attrs, ...kids) => {
+    const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+    el.append(...kids);
+    return el;
+  };
+  // One axis per stage: half for levels done, half for its incidents fixed.
+  function radar() {
+    const done = new Set(get("done", []));
+    const solved = new Set(get("pg-solved", []));
+    const stages = [...new Set(Q.levels.map((l) => l.stage))].map((name) => {
+      const ids = Q.levels.filter((l) => l.stage === name).map((l) => l.id);
+      const scn = window.DQPlayground.scenarios.filter((s) => ids.includes(s.level));
+      const lv = ids.filter((id) => done.has(id)).length / ids.length;
+      return { name, v: scn.length ? (lv + scn.filter((s) => solved.has(s.id)).length / scn.length) / 2 : lv };
+    });
+    const R = 92;
+    const at = (i, r) => { const a = (i / stages.length) * 2 * Math.PI - Math.PI / 2; return [r * Math.cos(a), r * Math.sin(a)]; };
+    const ring = (f) => stages.map((_, i) => at(i, R * f).map((n) => n.toFixed(1)).join(",")).join(" ");
+    const shape = stages.map((st, i) => at(i, R * Math.max(st.v, .04)).map((n) => n.toFixed(1)).join(",")).join(" ");
+    const pic = svg("svg", { viewBox: "-150 -122 300 244", class: "eng-radar", role: "img",
+      "aria-label": "Skill radar: " + stages.map((st) => `${st.name} ${Math.round(st.v * 100)}%`).join(", ") },
+      ...[.25, .5, .75, 1].map((f) => svg("polygon", { points: ring(f), class: "eng-r-grid" })),
+      ...stages.map((_, i) => { const [x, y] = at(i, R); return svg("line", { x1: 0, y1: 0, x2: x, y2: y, class: "eng-r-grid" }); }),
+      svg("polygon", { points: shape, class: "eng-r-shape" }),
+      ...stages.map((st, i) => { const [x, y] = at(i, R * Math.max(st.v, .04)); return svg("circle", { cx: x, cy: y, r: 3.5, class: "eng-r-dot" }); }),
+      ...stages.map((st, i) => {
+        const [x, y] = at(i, R + 12);
+        return svg("text", { x, y: y + 4, "text-anchor": Math.abs(x) < 8 ? "middle" : x > 0 ? "start" : "end", class: "eng-r-label" }, st.name);
+      }));
+    const top = stages.reduce((a, b) => (b.v > a.v ? b : a));
+    return h("div.eng-panel", null, h("p.eng-k", null, "Your skill shape"), pic,
+      h("p", null, top.v ? `Strongest: ${top.name}. Grow the other corners to round it out.` : "Fix incidents and finish levels to grow your shape."));
+  }
+  // Your learning, read like a service: uptime over 30 days, an SLO of 4 days a week,
+  // and an error budget of 3 rest days each week.
+  function uptime() {
     const log = get("log", {});
+    const bars = [];
+    const d = new Date();
+    d.setDate(d.getDate() - 89);
+    let up30 = 0;
+    for (let i = 0; i < 90; i++, d.setDate(d.getDate() + 1)) {
+      const on = Boolean(log[day(d)]);
+      if (on && i >= 60) up30++;
+      bars.push(h("span.eng-up" + (on ? ".on" : ""), { title: `${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })}: ${on ? "practised" : "rest day"}` }));
+    }
+    const pct = up30 / 30 * 100;
+    const ok = pct >= 4 / 7 * 100;
+    const w = new Date();
+    let rest = 0;
+    for (w.setDate(w.getDate() - ((w.getDay() + 6) % 7)); day(w) < today(); w.setDate(w.getDate() + 1)) if (!log[day(w)]) rest++;
+    const left = Math.max(0, 3 - rest);
+    return h("div.eng-panel", null,
+      h("p.eng-k", null, "Learning uptime"),
+      h("p.eng-score", null, pct.toFixed(1) + "%", h("span.eng-slo" + (ok ? ".ok" : ".low"), null, ok ? "Meeting SLO" : "Below SLO")),
+      h("p", null, "Last 30 days · SLO: practise 4 days a week"),
+      h("div.eng-uptime", { role: "img", "aria-label": `Practised on ${bars.filter((b) => b.classList.contains("on")).length} of the last 90 days` }, bars),
+      h("div.eng-up-axis", { "aria-hidden": "true" }, h("span", null, h("span.eng-90", null, "90"), h("span.eng-30", null, "30"), " days ago"), h("span", null, "Today")),
+      h("div.eng-budget", null,
+        h("span.eng-pips", { "aria-hidden": "true" }, [0, 1, 2].map((i) => h("span" + (i < left ? ".on" : "")))),
+        h("span", null, left ? `Error budget: ${left} rest day${left > 1 ? "s" : ""} left this week` : "Error budget spent this week. Practise today to stay on SLO.")));
+  }
+  function board() {
     const sc = score();
     const st = streaks();
-    const weeks = 53;
-    const d = new Date();
-    d.setDate(d.getDate() - d.getDay() - (weeks - 1) * 7);
-    const cells = [];
-    let total = 0;
-    for (let i = 0; i < weeks * 7; i++, d.setDate(d.getDate() + 1)) {
-      const n = d > new Date() ? -1 : log[day(d)] || 0;
-      total += Math.max(n, 0);
-      cells.push(h("span.eng-cell.l" + (n < 0 ? "x" : Math.min(4, Math.ceil(n / 2))),
-        { title: n < 0 ? "" : `${n || "No"} learning action${n === 1 ? "" : "s"} on ${d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}` }));
-    }
     const shifts = get("shifts", { count: 0, best: null });
     const stat = (v, label) => h("div", null, h("b", null, v), h("span", null, label));
-    const sim = window.DQPlayground.scenarios.length;
     return h("div.eng-board", null,
-      h("div.eng-board-head", null, h("h3", null, `${total} learning action${total === 1 ? "" : "s"} in the last year`),
-        h("span.eng-legend", { "aria-hidden": "true" }, "Less", [0, 1, 2, 3, 4].map((l) => h("span.eng-cell.l" + l)), "More")),
-      h("div.eng-graph-wrap", { tabindex: "0", role: "region", "aria-label": "Activity graph, scrolls sideways" }, h("div.eng-graph", { role: "img", "aria-label": `Activity graph: ${total} learning actions in the last year, current streak ${st.now} days` }, cells)),
+      h("div.eng-panels", null, radar(), uptime()),
       h("div.eng-stats", null,
-        stat(`${sc.solved}/${sim}`, "incidents fixed"),
+        stat(`${sc.solved}/${window.DQPlayground.scenarios.length}`, "incidents fixed"),
         stat(`${sc.levels}/${Q.levels.length}`, "levels done"),
         stat(`${sc.passed}/${Q.levels.length}`, "quizzes passed"),
         stat(String(shifts.count), shifts.best ? `shifts · best ${clock(shifts.best)}` : "on-call shifts"),
@@ -176,8 +224,6 @@
     const box = document.getElementById("engage");
     if (!box || !window.DQPlayground) return;
     box.replaceChildren(continueCard(), shiftCard(), scoreCard(), board());
-    const wrap = box.querySelector(".eng-graph-wrap");
-    wrap.scrollLeft = wrap.scrollWidth; // newest week in view on narrow screens
   }
 
   // --- put the lab in order before seeing it ---------------------------------

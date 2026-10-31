@@ -4076,7 +4076,7 @@ ${healthcheck ? `    healthcheck:
 
   const reveal = () => { term.scrollIntoView({ block: "center" }); input.focus({ preventScroll: true }); };
   window.DQPlayground = {
-    scenarios: SCENARIOS.map((s) => ({ id: s.id, title: s.title, story: s.story })),
+    scenarios: SCENARIOS.map((s) => ({ id: s.id, title: s.title, story: s.story, level: s.level })),
     load: (id) => { load(id); reveal(); },
     // From a #play/<id> link.
     open: (id) => { if (SCENARIOS.some((s) => s.id === id)) { if (id !== scenario.id) load(id); reveal(); } },
