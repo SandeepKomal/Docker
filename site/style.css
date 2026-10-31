@@ -695,3 +695,13 @@ kbd { font: 500 .72rem/1 "SF Mono", ui-monospace, Menlo, Consolas, monospace; le
 .brand-hub:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 @media (prefers-reduced-motion: reduce) { .brand-back { transition: none; } }
+
+/* The playground loads just after the first screen: keep its room so nothing below it moves. */
+.pg-scenarios:empty { min-height: 775px; }
+.pg-map:empty { min-height: 257px; }
+.pg-try:empty { min-height: 72px; }
+.pg-head:has(.pg-goal:empty) { min-height: 215px; }
+@media (max-width: 999px) { .pg-scenarios:empty { min-height: 900px; } }
+@media (max-width: 860px) { .pg-scenarios:empty { min-height: 1006px; } .pg-map:empty { min-height: 214px; } .pg-try:empty { min-height: 32px; } .pg-head:has(.pg-goal:empty) { min-height: 204px; } }
+@media (max-width: 720px) { .pg-scenarios:empty { min-height: 38px; } .pg-map:empty { min-height: 237px; } }
+@media (max-width: 599px) { .pg-map:empty { min-height: 257px; } .pg-try:empty { min-height: 72px; } .pg-head:has(.pg-goal:empty) { min-height: 300px; } }
