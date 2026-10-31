@@ -394,7 +394,7 @@
         h("h4", null, "Now learn it"),
         h("p", null, "Break this yourself in a safe playground and fix it. Doing it once is what makes you recognise it next time."),
         practiseRow(d.scenarios, "Practise:"),
-        h("p.note", null, "Then the level that teaches it: ", h("a", { href: "#path", onclick: () => setTimeout(() => scrollToEl($("#" + stageId(lv.stage)))) }, `Level ${lv.id} · ${lv.title}`)))));
+        h("p.note", null, "Then the level that teaches it: ", h("a", { href: "#path", onclick: (e) => { e.preventDefault(); goTab("path", () => scrollToEl($("#" + stageId(lv.stage)))); } }, `Level ${lv.id} · ${lv.title}`)))));
     if (!fromHash) scrollToEl($("#doctor-out"));
   }
 
