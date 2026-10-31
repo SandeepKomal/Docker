@@ -84,7 +84,7 @@ assert.strictEqual(problems, require(path.join(root, "tools/build-problems.js"))
 assert.doesNotMatch(problems, /<script/, "problems.html needs no JavaScript");
 for (const d of Q.doctor) assert.ok(problems.includes(`id="${d.id}"`), `problems.html has a section for ${d.id}`);
 assert.match(html, /<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">/);
-assert.doesNotMatch(html, /\sstyle=|\son[a-z]+=|<script>(?!<\/script>)|https?:\/\/(?!github\.com|sandeepkomal\.github\.io)/i, "no inline styles, handlers, scripts or third-party loads");
+assert.doesNotMatch(html, /\sstyle=|\son[a-z]+=|<script>(?!<\/script>)|https?:\/\/(?!github\.com|sandeepkomal\.github\.io|docs\.github\.com\/en\/site-policy\/)/i, "no inline styles, handlers, scripts or third-party loads");
 for (const src of html.match(/src="[^"]+"/g)) assert.ok(fs.existsSync(path.join(root, "site", src.slice(5, -1))), `${src} exists`);
 assert.match(html, /© 2024–2026 Sandeep Komal Pothu and contributors\./);
 assert.match(html, /Docker® is a registered trademark of Docker, Inc\. This project is independent and not affiliated with Docker, Inc\./);
