@@ -4,11 +4,15 @@
 "use strict";
 (function () {
   const Q = window.TRACK;
-  const { h } = window.DQUI;
+  // Loads before app.js, which draws the first screen with render(); app.js provides h().
+  const h = (...args) => window.DQUI.h(...args);
   const PREFIX = "dq-docker:";
   const get = (k, d) => { try { return JSON.parse(localStorage.getItem(PREFIX + k)) ?? d; } catch { return d; } };
   const set = (k, v) => { try { localStorage.setItem(PREFIX + k, JSON.stringify(v)); } catch { /* private mode */ } };
-  const day = (d) => d.toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
+  // One formatter each: building a new one per call is slow, and the status page formats 90 days.
+  const ymd = new Intl.DateTimeFormat("en-CA");
+  const short = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
+  const day = (d) => ymd.format(d); // YYYY-MM-DD in local time
   const today = () => day(new Date());
   const clock = (ms) => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 
@@ -65,7 +69,7 @@
   let shift = get("shift", null);
   let tick;
   function startShift() {
-    const all = window.DQPlayground.scenarios;
+    const all = Q.scenarios;
     const solved = new Set(get("pg-solved", []));
     const pool = all.filter((s) => !solved.has(s.id));
     const pick = (pool.length ? pool : all)[Math.floor(Math.random() * (pool.length || all.length))];
@@ -94,7 +98,7 @@
         h("p", null, log.count ? `${log.count} shift${log.count > 1 ? "s" : ""} done · best ${clock(log.best)}` : "A random incident you have not solved yet, against the clock."),
         h("button.pill.primary", { type: "button", onclick: startShift }, log.count ? "Take another shift" : "Start a shift"));
     }
-    const s = window.DQPlayground.scenarios.find((x) => x.id === shift.id);
+    const s = Q.scenarios.find((x) => x.id === shift.id);
     if (!s) { shift = null; return shiftCard(); }
     const time = h("span.eng-time", { "aria-live": "off" }, clock(Date.now() - shift.at));
     tick = setInterval(() => { time.textContent = clock(Date.now() - shift.at); }, 1000);
@@ -146,7 +150,7 @@
     const solved = new Set(get("pg-solved", []));
     const stages = [...new Set(Q.levels.map((l) => l.stage))].map((name) => {
       const ids = Q.levels.filter((l) => l.stage === name).map((l) => l.id);
-      const scn = window.DQPlayground.scenarios.filter((s) => ids.includes(s.level));
+      const scn = Q.scenarios.filter((s) => ids.includes(s.level));
       const lv = ids.filter((id) => done.has(id)).length / ids.length;
       return { name, v: scn.length ? (lv + scn.filter((s) => solved.has(s.id)).length / scn.length) / 2 : lv };
     });
@@ -179,7 +183,7 @@
     for (let i = 0; i < 90; i++, d.setDate(d.getDate() + 1)) {
       const on = Boolean(log[day(d)]);
       if (on && i >= 60) up30++;
-      bars.push(h("span.eng-up" + (on ? ".on" : ""), { title: `${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })}: ${on ? "practised" : "rest day"}` }));
+      bars.push(h("span.eng-up" + (on ? ".on" : ""), { title: `${short.format(d)}: ${on ? "practised" : "rest day"}` }));
     }
     const pct = up30 / 30 * 100;
     const ok = pct >= 4 / 7 * 100;
@@ -205,7 +209,7 @@
     return h("div.eng-board", null,
       h("div.eng-panels", null, radar(), uptime()),
       h("div.eng-stats", null,
-        stat(`${sc.solved}/${window.DQPlayground.scenarios.length}`, "incidents fixed"),
+        stat(`${sc.solved}/${Q.scenarios.length}`, "incidents fixed"),
         stat(`${sc.levels}/${Q.levels.length}`, "levels done"),
         stat(`${sc.passed}/${Q.levels.length}`, "quizzes passed"),
         stat(String(shifts.count), shifts.best ? `shifts · best ${clock(shifts.best)}` : "on-call shifts"),
@@ -255,7 +259,7 @@
 
   function render() {
     const box = document.getElementById("engage");
-    if (!box || !window.DQPlayground) return;
+    if (!box || !window.DQUI) return;
     box.replaceChildren(continueCard(), shiftCard(), scoreCard(), board());
   }
 
@@ -301,5 +305,4 @@
   }
 
   window.DQEngage = { order, active, render };
-  window.addEventListener("DOMContentLoaded", render);
 })();

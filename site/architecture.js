@@ -245,9 +245,12 @@
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && (pinned || touring)) { pinned = null; stopTour(); select(null); } });
   matchMedia("(max-width: 720px)").addEventListener("change", draw);
   window.addEventListener("hashchange", () => { if (location.hash !== "#arch") stopTour(); enter(); });
-  window.addEventListener("DOMContentLoaded", () => {
+  // Loaded on demand, usually after the page has finished loading.
+  const start = () => {
     draw();
     root.replaceChildren(figure, detail);
     enter();
-  });
+  };
+  if (document.readyState === "loading") window.addEventListener("DOMContentLoaded", start);
+  else start();
 })();

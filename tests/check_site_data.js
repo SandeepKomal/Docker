@@ -69,6 +69,12 @@ for (const row of Q.cheats) {
 }
 assert.strictEqual(new Set(Q.cheats.map((r) => r[0])).size, Q.cheats.length, "cheat sheet commands are unique");
 
+// The first screen counts and picks scenarios from data.js before the simulator loads;
+// the index must match the simulator exactly.
+require(path.join(root, "site/playground.js"));
+assert.deepStrictEqual(Q.scenarios, window.DQSim.SCENARIOS.map(({ id, title, level, story }) => ({ id, title, level, story })),
+  "TRACK.scenarios in site/data.js must match the playground's scenarios (id, title, level, story, in order)");
+
 // The page: one script per file, the CSP, and no inline styles or handlers.
 const html = fs.readFileSync(path.join(root, "site/index.html"), "utf8");
 assert.match(html, /<meta name="description" content="[^"]{80,}">/);

@@ -43,7 +43,27 @@
     location.reload();
   }
 
-  const scenarioTitles = () => Object.fromEntries((window.DQPlayground ? window.DQPlayground.scenarios : []).map((x) => [x.id, x.title]));
+  // --- features that load after the first screen -----------------------------
+
+  // The first screen needs only data.js, engage.js and this file. The rest loads in the
+  // background once it is drawn, or at once when someone asks for it; whatever calls
+  // into one of these modules waits for need() first.
+  const LAZY = { quiz: ["quiz-bank.js"], xray: ["xray.js"], arch: ["architecture.js"], play: ["playground.js"] };
+  const loading = {};
+  function load(srcs) {
+    return Promise.all(srcs.map((src) => loading[src] || (loading[src] = new Promise((resolve, reject) => {
+      const el = document.createElement("script");
+      el.src = src;
+      el.async = false; // run in the order asked for
+      el.addEventListener("load", resolve);
+      el.addEventListener("error", () => { delete loading[src]; el.remove(); reject(new Error("could not load " + src)); });
+      document.body.append(el);
+    }))));
+  }
+  const need = (...names) => load(names.flatMap((n) => LAZY[n]));
+  const needAll = () => need("quiz", "xray", "arch", "play");
+
+  const scenarioTitles = () => Object.fromEntries(Q.scenarios.map((x) => [x.id, x.title]));
   // Open a scenario in the playground, from anywhere on the site.
   function practise(id) { location.hash = "play/" + id; }
   // Copy a link to something on this page, for sharing or bookmarking.
@@ -77,6 +97,11 @@
   function show() {
     const [want, sub] = location.hash.slice(1).split("/");
     const tab = tabs.includes(want) ? want : ALIAS[want] || "path";
+    if (tab === "quiz" && !$("#quiz-list").firstChild) renderQuiz();
+    if (tab === "cheats" && !$("#cheat-out").firstChild) renderCheats();
+    if (tab === "xray") need("xray").catch(() => {});
+    if (tab === "arch") need("arch").catch(() => {});
+    if (want === "play" || want === "pg-title") need("play").catch(() => {});
     if (want === "fix" && sub) {
       const i = Q.doctor.findIndex((d) => d.id === sub);
       if (i >= 0) renderDoctor(i, true);
@@ -84,7 +109,7 @@
     if (tab !== current) {
       const page = $("#tab-" + tab);
       page.classList.remove("tab-in");
-      void page.offsetWidth; // restart the fade
+      if (current) void page.offsetWidth; // restart the fade (the first one needs no restart)
       page.classList.add("tab-in");
     }
     current = tab;
@@ -136,7 +161,7 @@
     draw(Q.signature.before);
   }
   function renderStats() {
-    const n = window.DQPlayground ? window.DQPlayground.scenarios.length : 0;
+    const n = Q.scenarios.length;
     $("#stats").replaceChildren(...[[n, "incidents to fix"], [Q.levels.length, "levels, basics to production"], [Q.doctor.length, "errors explained"]]
       .map(([v, label]) => h("div", null, h("b", null, String(v)), h("span", null, label))));
   }
@@ -217,7 +242,13 @@
     return a;
   }
 
+  // The question bank loads after the first screen; the levels list is there from the start.
+  const quizLabel = (lv) => `${lv.id} · ${lv.topic}` + (window.TRACK_QUIZ ? ` (${questionsFor(lv.id).length} questions)` : "");
+  const quizBank = () => need("quiz").then(() => {
+    for (const o of $("#quiz-level").options) { const lv = Q.levels.find((l) => l.id === o.value); if (lv) o.textContent = quizLabel(lv); }
+  });
   function renderQuiz() {
+    if (!window.TRACK_QUIZ) { quizBank().then(renderQuiz, () => {}); return; }
     const mode = $("#quiz-level").value;
     const exam = mode === "exam";
     const items = exam ? shuffle(Q.levels.flatMap((l) => questionsFor(l.id))).slice(0, EXAM_SIZE) : questionsFor(mode);
@@ -293,6 +324,7 @@
   let xrayPick = -1;
   let pasted = null;
   function renderXray(index) {
+    if (index >= 0 && !window.DQExplain) { need("xray").then(() => renderXray(index), () => {}); return; }
     xrayPick = index;
     document.querySelectorAll("#xray-pick button").forEach((b) => b.setAttribute("aria-selected", String(Number(b.dataset.index) === index)));
     const paste = index < 0;
@@ -333,6 +365,7 @@
     const error = $("#xray-error");
     const fail = (msg) => { error.textContent = msg; error.hidden = false; };
     if (!text.trim()) return fail("Paste a Dockerfile first, or choose Load an example.");
+    if (!window.DQExplain) return void need("xray").then(explainPasted, () => fail("The X-ray could not load. Reload the page and try again."));
     const res = window.DQExplain.explain(text);
     if (res.error) return fail(res.error);
     error.hidden = true;
@@ -462,9 +495,9 @@
         // Where names the scenario a command needs ("any" for whichever is open);
         // without one it needs Docker on your machine.
         const actions = h("div.cheat-actions", null,
-          where && window.DQPlayground ? h("button.copy", {
+          where ? h("button.copy", {
             type: "button", title: where === "any" ? "Run it in the playground" : `Run it in the playground scenario "${titles[where]}"`,
-            onclick: () => { location.hash = where === "any" ? "path" : "play/" + where; show(); window.DQPlayground.prefill(full, where); }
+            onclick: () => { location.hash = where === "any" ? "path" : "play/" + where; show(); need("play").then(() => window.DQPlayground.prefill(full, where), () => {}); }
           }, "Try") : h("a.copy.lab", { href: repoUrl("docker_installation.md"), title: "Needs Docker on your machine" }, "Lab"),
           copyButton(full));
         return h("li", null, h("div", null, code, h("span.muted", null, what)), actions);
@@ -528,7 +561,7 @@
   ];
   function renderPalette() {
     const words = paletteInput.value.toLowerCase().split(/\s+/).filter(Boolean);
-    const scenarios = (window.DQPlayground ? window.DQPlayground.scenarios : []).map((sc) => ({ label: `Playground: ${sc.title}`, kind: "Practice", run: () => practise(sc.id) }));
+    const scenarios = Q.scenarios.map((sc) => ({ label: `Playground: ${sc.title}`, kind: "Practice", run: () => practise(sc.id) }));
     paletteItems = [...ACTIONS, ...scenarios].filter((a) => words.every((w) => `${a.label} ${a.hint || ""} ${a.kind}`.toLowerCase().includes(w))).slice(0, 8);
     paletteActive = Math.min(paletteActive, Math.max(0, paletteItems.length - 1));
     paletteList.replaceChildren(...paletteItems.map((a, i) => h("li", {
@@ -540,6 +573,7 @@
   }
   function openPalette() {
     if (palette.open) return;
+    needAll().catch(() => {});
     paletteInput.value = "";
     paletteActive = 0;
     renderPalette();
@@ -577,7 +611,7 @@
   // --- init ----------------------------------------------------------------
 
   $("#quiz-level").append(h("option", { value: "exam" }, `Exam: ${EXAM_SIZE} random questions from every level`));
-  for (const lv of Q.levels) $("#quiz-level").append(h("option", { value: lv.id }, `${lv.id} · ${lv.topic} (${questionsFor(lv.id).length} questions)`));
+  for (const lv of Q.levels) $("#quiz-level").append(h("option", { value: lv.id }, quizLabel(lv)));
   $("#quiz-level").value = "00";
   $("#quiz-level").addEventListener("change", renderQuiz);
   $("#quiz-again").addEventListener("click", () => { renderQuiz(); $("#quiz-list").scrollIntoView({ block: "start" }); });
@@ -603,21 +637,28 @@
   renderFill();
   $("#cheat-fill-box").open = matchMedia("(min-width: 721px)").matches || Object.keys(fills).length > 0;
 
-  // Shared with architecture.js, which loads after this script.
+  // Shared with engage.js, architecture.js and playground.js.
   window.DQUI = { h, rich, practiseRow, copyLink };
 
+  // The first screen, in one pass, so the hero, stats, path and scoreboard appear together.
   renderGuides();
   renderStage();
-  renderQuiz();
+  renderStats();
+  window.DQEngage.render();
+  renderPath();
   renderXray(-1);
   show();
-  // Practice links and Try buttons need the playground, which loads after this script.
-  window.addEventListener("DOMContentLoaded", () => {
-    renderPath();
-    renderCheats();
-    renderStats();
-    if (current === "doctor") show();
-    if (location.hash.startsWith("#play/")) window.DQPlayground.open(location.hash.slice(6));
+
+  // A #play/<id> link opens its scenario as soon as the playground has loaded.
+  const openPlay = () => {
+    if (location.hash.startsWith("#play/")) need("play").then(() => window.DQPlayground.open(location.hash.slice(6)), () => {});
+  };
+  openPlay();
+  window.addEventListener("hashchange", openPlay);
+  // Everything else loads while the reader looks at the first screen.
+  (window.requestIdleCallback || ((fn) => setTimeout(fn, 200)))(() => {
+    if (!$("#cheat-out").firstChild) renderCheats();
+    needAll().catch(() => {});
+    quizBank().then(() => { if (!$("#quiz-list").firstChild) renderQuiz(); }, () => {});
   });
-  window.addEventListener("hashchange", () => { if (location.hash.startsWith("#play/") && window.DQPlayground) window.DQPlayground.open(location.hash.slice(6)); });
 })();
